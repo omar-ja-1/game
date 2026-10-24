@@ -1,0 +1,6 @@
+{
+  "name": "Aura // 3D Nocturnal Portfolio World",
+  "description": "An interactive nocturnal 3D sci-fi museum and portfolio world featuring a friendly robot companion, floating holographic billboards, and responsive exploration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
