@@ -15,6 +15,7 @@ import {
   type CollectibleOrb,
   type ExhibitLocation,
 } from './portfolioLogic';
+import * as THREE from 'three';
 import {
   QUALITY_PROFILES,
   RuntimeQualityGovernor,
@@ -22,10 +23,14 @@ import {
   resolveQualityProfile,
   resolveQualityTierFromSignals,
 } from '../three/qualityConfig';
+import { CompanionRobot } from '../three/CompanionRobot';
+import { FLOOR_VISUAL_CONFIG } from '../three/proceduralAssets';
 import { buildZoneLayout, computeDynamicBoardPlacements } from './zoneLayout';
 import {
   REVIEWS_PER_PAGE,
+  createEmptyPortfolioOverview,
   createPortfolioRepository,
+  createStaticPortfolioDataSource,
   normalizeValidContactLinks,
   paginateReviewsCollection,
   validateFeedbackPayload,
@@ -466,3 +471,168 @@ test('validateFeedbackPayload and PortfolioRepository enforce validation and hon
   assert.equal(pageOne.totalItems, 5);
   assert.equal(pageOne.items[0].id, 'rev-new');
 });
+
+test('FLOOR_VISUAL_CONFIG preserves dark-navy nocturnal identity on Low quality without black crush', () => {
+  assert.equal(FLOOR_VISUAL_CONFIG.tileBaseHex, '#0f172a');
+  assert.equal(FLOOR_VISUAL_CONFIG.tileInsetHex, '#131d33');
+  assert.ok(FLOOR_VISUAL_CONFIG.lowBaseColor > 0x808080);
+  assert.ok(FLOOR_VISUAL_CONFIG.lowEmissiveColor > 0x000000);
+  assert.ok(FLOOR_VISUAL_CONFIG.lowEmissiveIntensity >= 0.4);
+
+  // Low profile continues using inexpensive Lambert floor with real-time shadows disabled
+  assert.equal(QUALITY_PROFILES.low.useLightweightFloor, true);
+  assert.equal(QUALITY_PROFILES.low.shadowsEnabled, false);
+  assert.equal(QUALITY_PROFILES.medium.useLightweightFloor, false);
+  assert.equal(QUALITY_PROFILES.high.useLightweightFloor, false);
+});
+
+test('CompanionRobot hierarchy, +Z face alignment, grounded feet, facial states, and greeting timeline work across frame rates', () => {
+  const robot = new CompanionRobot();
+
+  // 1. Connected hierarchy & symmetrical limb pivots
+  assert.equal(robot.headGroup.parent, robot.upperBodyGroup);
+  assert.equal(robot.leftArm.parent, robot.upperBodyGroup);
+  assert.equal(robot.rightArm.parent, robot.upperBodyGroup);
+  assert.equal(robot.leftArm.position.x, -robot.rightArm.position.x);
+  assert.equal(robot.leftLeg.position.x, -robot.rightLeg.position.x);
+
+  // 2. Face screen faces strictly forward (+Z) with zero sideways rotation
+  assert.ok(robot.faceMesh.position.z > 0.2);
+  assert.ok(Math.abs(robot.faceMesh.rotation.y) < 1e-6);
+
+  // 3. Standing and walking feet stay grounded without penetrating below the floor (y = 0)
+  robot.group.updateMatrixWorld(true);
+  const standBox = new THREE.Box3()
+    .expandByObject(robot.leftLeg)
+    .expandByObject(robot.rightLeg);
+  assert.ok(standBox.min.y >= -0.002 && standBox.min.y <= 0.01);
+
+  robot.isMoving = true;
+  for (let i = 0; i < 24; i++) {
+    robot.update(1 / 60, i / 60);
+    robot.group.updateMatrixWorld(true);
+    const stepBox = new THREE.Box3()
+      .expandByObject(robot.leftLeg)
+      .expandByObject(robot.rightLeg);
+    assert.ok(
+      stepBox.min.y >= -0.002,
+      `Foot penetrated below floor during walk step ${i}: min.y=${stepBox.min.y}`
+    );
+  }
+  robot.isMoving = false;
+  robot.setEmotion('idle');
+
+  // 4. Facial expression states & zero redundant canvas redraws when idle
+  robot.setFacialExpression('neutral');
+  assert.deepEqual(robot.eyeCanvas.getLastRenderedFace(), {
+    expression: 'neutral',
+    isBlinking: false,
+  });
+  const countBeforeIdle = robot.eyeCanvas.redrawCount;
+  for (let i = 0; i < 20; i++) {
+    robot.update(1 / 60, 1 + i / 60);
+  }
+  assert.equal(robot.eyeCanvas.redrawCount, countBeforeIdle);
+
+  robot.setFacialExpression('happy');
+  assert.equal(robot.eyeCanvas.getLastRenderedFace().expression, 'happy');
+  robot.setFacialExpression('curious');
+  assert.equal(robot.eyeCanvas.getLastRenderedFace().expression, 'curious');
+
+  // 5. Coordinated greeting sequence at 60 FPS (raise + smile + forearm wave + warm hold + return)
+  robot.triggerGreeting({ faceYaw: 0 });
+  assert.equal(robot.isWaving, true);
+  assert.equal(robot.currentExpression, 'greeting');
+
+  robot.update(0.6, 2.0);
+  assert.equal(robot.isWaving, true);
+  assert.equal(robot.currentExpression, 'greeting');
+  assert.ok(robot.rightArm.rotation.z > 0.25, 'Right shoulder should abduct outward clearly');
+  assert.ok(robot.rightForearmPivot.rotation.x < -0.6, 'Right elbow should bend upward cleanly');
+
+  // Advance into warm hold phase (~1.75s)
+  robot.update(1.15, 3.15);
+  assert.equal(robot.isWaving, true);
+  assert.equal(robot.currentExpression, 'happy');
+
+  // Advance past 2.35s completion -> settles cleanly to neutral idle
+  robot.update(0.75, 3.9);
+  assert.equal(robot.isWaving, false);
+  assert.equal(robot.currentExpression, 'neutral');
+
+  // 6. Frame-rate independence check at 20 FPS (dt = 0.05s)
+  robot.triggerGreeting({ faceYaw: Math.PI / 4 });
+  for (let step = 0; step < 50; step++) {
+    robot.update(0.05, 5 + step * 0.05);
+  }
+  assert.equal(robot.isWaving, false);
+  assert.equal(robot.currentExpression, 'neutral');
+
+  // 7. Quality switching & clean resource disposal across Low / Medium / High
+  robot.applyQuality(QUALITY_PROFILES.low, false);
+  assert.equal(robot.torso.castShadow, false);
+  robot.applyQuality(QUALITY_PROFILES.high, false);
+  assert.equal(robot.torso.castShadow, true);
+
+  robot.dispose();
+});
+
+test('PortfolioRepository default snapshot is decoupled from demo records and createStaticPortfolioDataSource adapts host data', async () => {
+  const defaultEmptyRepo = createPortfolioRepository(
+    { isConfigured: false, apiBaseUrl: '' },
+    { envRecord: {} }
+  );
+  const emptyOverview = await defaultEmptyRepo.getOverview();
+  assert.equal(emptyOverview.projects.length, 0);
+  assert.equal(emptyOverview.skillCategories.length, 0);
+  assert.equal(emptyOverview.certificates.length, 0);
+  assert.equal(emptyOverview.contacts.length, 0);
+  assert.equal(emptyOverview.reviewsPreview.items.length, 0);
+  assert.equal(emptyOverview.backendConnected, false);
+
+  const hostReviews = buildTestReviews(5);
+  const hostOverview: PortfolioOverviewData = {
+    ...createEmptyPortfolioOverview(),
+    profile: {
+      ...createEmptyPortfolioOverview().profile,
+      name: 'Host Portfolio Owner',
+      title: 'Principal Systems Engineer',
+    },
+    projects: buildTestProjects(3),
+    backendConnected: true,
+    dataSourceLabel: 'Host SSR Snapshot',
+  };
+
+  let submittedComment = '';
+  const staticAdapter = createStaticPortfolioDataSource(hostOverview, {
+    reviews: hostReviews,
+    onSubmitFeedback: async (payload) => {
+      submittedComment = payload.comment;
+      return {
+        ok: true,
+        persisted: true,
+        status: 'saved',
+        message: 'Saved via host adapter',
+      };
+    },
+  });
+
+  const resolvedOverview = await staticAdapter.getOverview();
+  assert.equal(resolvedOverview.profile.name, 'Host Portfolio Owner');
+  assert.equal(resolvedOverview.projects.length, 3);
+  assert.equal(resolvedOverview.reviewsPreview.items.length, 3);
+  assert.equal(resolvedOverview.reviewsPreview.totalPages, 2);
+
+  const pageTwo = await staticAdapter.getReviewsPage(2, REVIEWS_PER_PAGE);
+  assert.equal(pageTwo.items.length, 2);
+
+  const feedbackRes = await staticAdapter.submitFeedback({
+    displayName: 'Casey',
+    rating: 5,
+    comment: 'Embedded cleanly inside the host portfolio route.',
+  });
+  assert.equal(feedbackRes.ok, true);
+  assert.equal(feedbackRes.persisted, true);
+  assert.equal(submittedComment, 'Embedded cleanly inside the host portfolio route.');
+});
+

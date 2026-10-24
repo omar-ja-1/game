@@ -50,7 +50,8 @@ export interface VisitorSignal {
 
 export type GameState = 'title' | 'playing' | 'paused' | 'inspecting' | 'beacon_activated';
 export type CameraMode = 'follow' | 'orbit' | 'firstperson';
-export type CompanionEmotion = 'idle' | 'happy' | 'waving' | 'curious' | 'excited';
+export type CompanionEmotion = 'idle' | 'happy' | 'waving' | 'curious' | 'excited' | 'greeting';
+export type FacialExpressionState = 'neutral' | 'happy' | 'greeting' | 'curious';
 
 export type QualityPreference = 'auto' | 'low' | 'medium' | 'high';
 export type QualityTier = 'low' | 'medium' | 'high';
@@ -255,3 +256,34 @@ export interface WorldBillboardNode {
   externalNewTab?: boolean;
   action: BillboardAction;
 }
+
+/**
+ * Replaceable data-access contract consumed by the 3D experience and HTML presentation panels.
+ * Host websites can pass `PortfolioRepository` (REST API) or a custom implementation backed
+ * by their own API client, GraphQL layer, CMS, or framework loader.
+ */
+export interface PortfolioDataSource {
+  isBackendConfigured(): boolean;
+  getOverview(options?: {
+    forceRefresh?: boolean;
+    signal?: AbortSignal;
+  }): Promise<PortfolioOverviewData>;
+  getReviewsPage(
+    page?: number,
+    pageSize?: number,
+    options?: { forceRefresh?: boolean; signal?: AbortSignal }
+  ): Promise<PaginatedReviewsResult>;
+  submitFeedback(
+    payload: FeedbackSubmissionPayload,
+    signal?: AbortSignal
+  ): Promise<FeedbackSubmissionResult>;
+}
+
+export type PortfolioEntryMode = 'title' | 'world' | 'quick-view';
+
+export type HostNavigationEvent =
+  | { type: 'section'; zone: Exclude<ZoneId, 'hub'> }
+  | { type: 'project'; projectId: string; project?: ProjectItem }
+  | { type: 'certificate'; certificateId: string; certificate?: CertificateItem }
+  | { type: 'contact'; contact: ContactLinkItem };
+

@@ -10,6 +10,7 @@ import {
   ContactLinkItem,
   FeedbackSubmissionResult,
   PaginatedReviewsResult,
+  PortfolioDataSource,
   PortfolioOverviewData,
   ProjectItem,
   SkillCategoryGroup,
@@ -73,12 +74,14 @@ function isSafeHttpUrl(url?: string): boolean {
 export interface ReviewsAndFeedbackPanelProps {
   initialReviews: PaginatedReviewsResult;
   backendConnected: boolean;
+  dataSource?: PortfolioDataSource;
   onFeedbackSaved?: () => void;
 }
 
 export const ReviewsAndFeedbackPanel: React.FC<ReviewsAndFeedbackPanelProps> = ({
   initialReviews,
   backendConnected,
+  dataSource = portfolioRepository,
   onFeedbackSaved,
 }) => {
   const [reviewsPage, setReviewsPage] = useState<PaginatedReviewsResult>(initialReviews);
@@ -101,23 +104,26 @@ export const ReviewsAndFeedbackPanel: React.FC<ReviewsAndFeedbackPanelProps> = (
     setCurrentPage(initialReviews.page || 1);
   }, [initialReviews]);
 
-  const loadPage = useCallback(async (targetPage: number, forceRefresh = false) => {
-    setIsLoadingPage(true);
-    setPageError(null);
-    try {
-      const result = await portfolioRepository.getReviewsPage(targetPage, REVIEWS_PER_PAGE, {
-        forceRefresh,
-      });
-      setReviewsPage(result);
-      setCurrentPage(result.page);
-    } catch (err) {
-      setPageError(
-        err instanceof Error ? err.message : 'Unable to load reviews from the backend.'
-      );
-    } finally {
-      setIsLoadingPage(false);
-    }
-  }, []);
+  const loadPage = useCallback(
+    async (targetPage: number, forceRefresh = false) => {
+      setIsLoadingPage(true);
+      setPageError(null);
+      try {
+        const result = await dataSource.getReviewsPage(targetPage, REVIEWS_PER_PAGE, {
+          forceRefresh,
+        });
+        setReviewsPage(result);
+        setCurrentPage(result.page);
+      } catch (err) {
+        setPageError(
+          err instanceof Error ? err.message : 'Unable to load reviews from the backend.'
+        );
+      } finally {
+        setIsLoadingPage(false);
+      }
+    },
+    [dataSource]
+  );
 
   const handlePrevPage = () => {
     if (currentPage <= 1 || isLoadingPage) return;
@@ -139,7 +145,7 @@ export const ReviewsAndFeedbackPanel: React.FC<ReviewsAndFeedbackPanelProps> = (
     setSubmitResult(null);
 
     try {
-      const res = await portfolioRepository.submitFeedback({
+      const res = await dataSource.submitFeedback({
         displayName,
         organization: organization || undefined,
         contactInfo: contactInfo || undefined,
@@ -456,6 +462,7 @@ interface PortfolioSectionModalProps {
   modal: Exclude<ActiveModalView, { type: 'beacon' }>;
   overview: PortfolioOverviewData;
   currentZone: ZoneId;
+  dataSource?: PortfolioDataSource;
   onClose: () => void;
   onNavigateZone: (zone: ZoneId) => void;
   onReturnHub: () => void;
@@ -466,6 +473,7 @@ export const PortfolioSectionModal: React.FC<PortfolioSectionModalProps> = ({
   modal,
   overview,
   currentZone,
+  dataSource = portfolioRepository,
   onClose,
   onNavigateZone,
   onReturnHub,
@@ -1183,9 +1191,9 @@ export const PortfolioSectionModal: React.FC<PortfolioSectionModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 md:p-8 bg-[#04060a]/88 text-white select-text touch-auto"
+      className="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-6 md:p-8 bg-[#04060a]/88 text-white select-text touch-auto"
     >
-      <div className="w-full max-w-5xl max-h-[92vh] bg-[#090d16] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+      <div className="w-full max-w-5xl max-h-[92%] bg-[#090d16] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Top Modal Header */}
         <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-slate-800 bg-[#0c121d] shrink-0">
           <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
@@ -1215,6 +1223,7 @@ export const PortfolioSectionModal: React.FC<PortfolioSectionModalProps> = ({
             <ReviewsAndFeedbackPanel
               initialReviews={overview.reviewsPreview}
               backendConnected={overview.backendConnected}
+              dataSource={dataSource}
               onFeedbackSaved={onFeedbackSaved}
             />
           )}

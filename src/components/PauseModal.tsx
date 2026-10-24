@@ -57,7 +57,7 @@ export const PauseModal: React.FC<PauseModalProps> = ({
   }, [onResume]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#04060a]/88 text-white select-none touch-auto overflow-y-auto">
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-[#04060a]/88 text-white select-none touch-auto overflow-y-auto">
       <div className="w-full max-w-md bg-[#090d16] border border-slate-800 rounded-3xl p-6 md:p-7 shadow-2xl space-y-5 my-auto">
         {/* Title */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">

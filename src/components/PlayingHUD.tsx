@@ -87,7 +87,7 @@ export const PlayingHUD: React.FC<PlayingHUDProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 pointer-events-none select-none z-30 flex flex-col justify-between p-3 sm:p-4 md:p-6 text-white font-sans">
+    <div className="absolute inset-0 pointer-events-none select-none z-30 flex flex-col justify-between p-3 sm:p-4 md:p-6 text-white font-sans">
       {/* 1. TOP ZONE: Perimeter Clusters */}
       <div className="flex flex-col gap-2 w-full">
         <div className="flex items-start justify-between w-full gap-2">

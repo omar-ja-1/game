@@ -10,21 +10,19 @@ interface TitleScreenProps {
   onOpenQuickView: () => void;
   isLoadingData?: boolean;
   profileName?: string;
+  worldTitle?: string;
+  worldTagline?: string;
 }
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({
   onStart,
   onOpenQuickView,
   isLoadingData = false,
-  profileName = 'Aura Kaelen',
+  profileName,
+  worldTitle,
+  worldTagline,
 }) => {
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('autostart') === '1') {
-      onStart();
-      return;
-    }
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Enter' || e.code === 'Space') {
         e.preventDefault();
@@ -35,8 +33,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onStart]);
 
+  const resolvedProfileName = profileName?.trim();
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-between p-6 sm:p-8 md:p-14 bg-gradient-to-b from-[#060911]/92 via-[#060911]/68 to-[#060911]/96 text-white select-none touch-auto overflow-y-auto">
+    <div className="absolute inset-0 z-50 flex flex-col justify-between p-6 sm:p-8 md:p-14 bg-gradient-to-b from-[#060911]/92 via-[#060911]/68 to-[#060911]/96 text-white select-none touch-auto overflow-y-auto">
       {/* Top Bar: Quiet Metadata */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 text-xs tracking-wider text-cyan-400 font-mono">
@@ -48,9 +48,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             {isLoadingData ? 'SYNCHRONIZING DATA' : '6 SECTORS READY'}
           </span>
         </div>
-        <div className="text-xs text-slate-400 font-mono uppercase">
-          <span>{profileName}</span>
-        </div>
+        {resolvedProfileName && (
+          <div className="text-xs text-slate-400 font-mono uppercase">
+            <span>{resolvedProfileName}</span>
+          </div>
+        )}
       </div>
 
       {/* Center Hero Lockup */}
@@ -84,13 +86,18 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         </div>
 
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight font-sans text-white text-balance leading-none">
-          AURA <span className="text-cyan-400">·</span> 3D PORTFOLIO WORLD
+          {worldTitle ? (
+            worldTitle
+          ) : (
+            <>
+              AURA <span className="text-cyan-400">·</span> 3D PORTFOLIO WORLD
+            </>
+          )}
         </h1>
 
         <p className="text-base md:text-lg text-slate-300 font-normal leading-relaxed max-w-xl">
-          Navigate a calm futuristic plaza with your companion automaton to explore About Me,
-          Projects, Skills, Certificates, Contact Channels, and Visitor Reviews — or open Quick View
-          for an instant standard portfolio.
+          {worldTagline ||
+            'Navigate a calm futuristic plaza with your companion automaton to explore About Me, Projects, Skills, Certificates, Contact Channels, and Visitor Reviews — or open Quick View for an instant standard portfolio.'}
         </p>
 
         {/* Primary & Accessible Quick-View Actions */}

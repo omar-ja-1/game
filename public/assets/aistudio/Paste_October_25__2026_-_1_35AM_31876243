@@ -1,0 +1,526 @@
+# Refinement Phase: Improve the 3D World, Redesign the Companion Robot, and Prepare the Project for Production Integration
+
+Act as a senior Three.js engineer, React architect, 3D character designer, animation engineer, and mobile performance specialist.
+
+You are continuing work on my EXISTING 3D portfolio project. The project already has an interactive futuristic world, a player controller, a companion robot, adaptive graphics quality, six data-driven portfolio sections, multiple navigable zones, a lightweight Quick View, and an initial portfolio data repository.
+
+Your task is to improve the quality and correctness of the existing implementation and prepare it for integration into my real portfolio website.
+
+**Inspect the actual current codebase first, then implement the changes directly. Do not rebuild the application from scratch, remove existing functionality, or undo previous performance optimizations.**
+
+The work has four primary objectives:
+
+1. Fix the mobile Low Quality floor appearance while keeping the original world's visual identity.
+2. Improve the companion robot's model, facial features, proportions, and greeting animation.
+3. Make the codebase modular and straightforward to integrate into my existing portfolio website and connect to my real API later.
+4. Verify that these improvements do not regress mobile performance, existing navigation, or the newly implemented portfolio zones.
+
+---
+
+# PART 1 — RESTORE THE FLOOR'S VISUAL IDENTITY IN LOW QUALITY
+
+## Current problem
+
+The floor becomes almost completely black when the graphics quality is set to Low.
+
+Although reducing rendering cost is necessary for weaker devices, making the floor completely black removes too much visual information and makes the environment appear flat and disconnected from the rest of the world.
+
+I do not want this visual trade-off.
+
+## Required appearance
+
+In Low Quality, the floor should retain approximately the same base color and overall visual identity as the normal-quality environment.
+
+Preserve the existing dark navy, charcoal, and subtle blue-gray tones. Inspect the actual current floor material and use its original color as the reference rather than introducing an unrelated color palette.
+
+The low-quality floor should:
+
+- Keep its recognizable original base color.
+- Remain distinguishable from the surrounding background and structures.
+- Preserve enough visual depth to make player movement and navigation comfortable.
+- Maintain the futuristic nocturnal atmosphere.
+- Avoid unnecessary bright highlights and expensive reflections.
+- Avoid becoming pure black unless the original material is genuinely intended to be black.
+- Retain sufficient contrast with the billboards, central structure, paths, interactive objects, and character.
+
+## Implementation requirements
+
+Inspect the actual floor material and the adaptive quality configuration, especially the current implementation in `src/three/WorldScene.ts`, `src/three/qualityConfig.ts`, and any related procedural asset files.
+
+The previous implementation reportedly switches the floor from `MeshStandardMaterial` to `MeshLambertMaterial` in Low Quality. Do not remove this optimization blindly.
+
+Instead:
+
+1. Determine why the current material appears black.
+2. Check whether the problem is caused by the material's color, lighting assumptions, exposure, renderer settings, fog, tone mapping, or the replacement material's configuration.
+3. Preserve the inexpensive material approach wherever possible.
+4. Correct the base color and configure the material so that it does not depend on expensive dynamic lighting to remain visible.
+5. If necessary, use a lightweight, controlled ambient contribution or a subtle baked/static visual treatment rather than restoring numerous dynamic lights.
+6. Preserve any important floor markings or navigation cues using inexpensive materials or geometry.
+7. Ensure the result behaves correctly when switching between Low, Medium, and High at runtime.
+
+Do not solve this by simply restoring all the original real-time lights, expensive reflections, high-cost shadows, or post-processing.
+
+## Quality comparison
+
+- **High:** Preserve the original intended floor appearance and existing visual effects.
+- **Medium:** Keep the original color identity while moderately reducing expensive effects.
+- **Low:** Keep a similar base color and readable surface, using inexpensive materials and little or no real-time shadow rendering.
+
+All profiles should belong to the same recognizable world.
+
+After implementation, verify that switching quality modes updates the floor correctly without recreating the entire application, breaking scene objects, or leaking GPU resources.
+
+---
+
+# PART 2 — REDESIGN AND FIX THE COMPANION ROBOT
+
+## Current problem
+
+The existing companion robot has visual and construction issues. Its proportions and details need improvement, and its face is not expressive enough.
+
+I want a recognizable, polished companion character that feels intentionally designed for this dark futuristic world.
+
+Do not merely adjust colors on the current model or hide its problems with lighting.
+
+Inspect the existing robot geometry, hierarchy, materials, pivots, animations, and transforms. Fix the underlying issues.
+
+The current implementation is believed to be located in `src/three/CompanionRobot.ts`, but inspect the actual source before deciding where changes belong.
+
+## A. Overall character design
+
+Develop a cohesive, friendly, futuristic companion robot.
+
+The intended aesthetic is:
+
+- Dark charcoal and graphite body surfaces.
+- Dark navy details.
+- Restrained cyan and purple accents.
+- A friendly, slightly playful personality.
+- Clean, deliberate geometric forms.
+- A readable silhouette that looks good in a dark environment.
+- A polished game-character appearance without requiring a heavy external 3D model.
+
+Aim for a stylized, high-quality robotic companion that fits the existing nocturnal environment.
+
+Preserve the character's existing role, approximate world position, and relationship to the player unless a change is essential for fixing the design.
+
+Do not unexpectedly turn the robot into a completely different creature or make it oversized relative to the player and billboards.
+
+## B. Fix the model's proportions and geometry
+
+Inspect and correct:
+
+- Head-to-body proportions.
+- Symmetry between the left and right sides.
+- Arm and leg proportions, if applicable.
+- Joint positions and pivots.
+- Misaligned or intersecting geometry.
+- Unintentional gaps between connected parts.
+- Materials with inconsistent colors or finishes.
+- Incorrect transforms or orientations.
+- Feet or other parts that penetrate the floor unexpectedly.
+- Facial features that are hidden, incorrectly oriented, or difficult to see.
+
+The robot should look coherent from the front, sides, and the camera angles the player can actually see.
+
+Use an intentional hierarchy for the head, face, torso, limbs, hands, and other moving parts. If the current hierarchy is unsuitable for animation, refactor it carefully without breaking existing integrations.
+
+Keep geometry reasonably simple. Prefer reusable geometries and materials where possible, and avoid adding large amounts of polygon detail that would undermine mobile performance.
+
+## C. Give the robot an actual readable face
+
+The robot must have a recognizable face rather than just a collection of unrelated glowing shapes.
+
+Design the face to include:
+
+- Two clearly visible, symmetrical eyes.
+- A readable mouth or digital mouth display.
+- A pleasant neutral expression.
+- A distinct smiling expression.
+- An optional blink or subtle eye animation where appropriate.
+
+The eyes and mouth must face the player or the intended front direction of the character.
+
+Make them legible at the normal gameplay camera distance. They should not become tiny decorative details that visitors cannot recognize.
+
+The facial design should be integrated into the character's head rather than appearing to float in the wrong position.
+
+Choose a suitable implementation based on the existing rendering architecture. Possible options include lightweight meshes, emissive materials, simple curves, or a small reusable face component.
+
+Use the least expensive approach that achieves the desired visual result.
+
+If the robot uses a digital face, support multiple clear expressions without unnecessarily rebuilding geometries or materials every frame.
+
+### Facial states
+
+Implement at least these states:
+
+- `neutral`
+- `happy`
+- `greeting`
+
+The neutral face should look friendly rather than broken or lifeless.
+
+The happy state should have an unmistakable smile.
+
+The greeting state should coordinate the smile with the greeting animation.
+
+Do not simulate a smile merely by making the eyes brighter. The mouth itself should visibly change.
+
+## D. Implement a coordinated greeting animation
+
+When the existing experience calls for the robot to greet the visitor, the robot should perform a friendly, coordinated greeting.
+
+The greeting sequence should:
+
+1. Orient the robot toward the player when appropriate.
+2. Transition smoothly into the greeting pose.
+3. Raise one arm or hand.
+4. Perform a short, recognizable wave.
+5. Switch the face to a visible smile.
+6. Optionally add one subtle head tilt or blink.
+7. Hold the friendly expression briefly.
+8. Return smoothly to the appropriate neutral or idle state.
+
+The smile and waving motion must happen together.
+
+The greeting must not look like unrelated animations playing simultaneously.
+
+Avoid abrupt position jumps, clipped arms, rotating the wrong pivot, detached limbs, or animation loops that never finish.
+
+### When the greeting should trigger
+
+Inspect the existing interaction and game lifecycle before deciding when to trigger the greeting.
+
+Use an appropriate existing event, such as the introductory greeting or a deliberate proximity-based interaction.
+
+Do not repeatedly replay the entire greeting whenever the player moves slightly, changes camera direction, or crosses a tiny position threshold.
+
+If a greeting is proximity-triggered, use a sensible trigger distance, a cooldown, and a reset policy.
+
+Keep the greeting accessible even if the visitor skips the introductory animation or enters the world through Quick View and later returns to 3D.
+
+The robot should not interfere with player controls, section navigation, or billboard interaction.
+
+## E. Add lightweight idle behavior
+
+After greeting, the robot can use subtle idle behaviors, such as:
+
+- A slight head movement.
+- Gentle body motion.
+- Occasional eye blinking.
+- A restrained breathing-like movement if suitable.
+
+These effects must be understated.
+
+Do not create continuous complex skeletal animation or many independent animation loops when a few inexpensive transforms will produce the desired result.
+
+Use a unified, predictable animation update mechanism.
+
+Decorative animations should pause or reduce their update frequency when appropriate, especially when the world is hidden, paused, or inaccessible behind a modal.
+
+## F. Robot performance requirements
+
+The character improvement must not undo the existing mobile optimization work.
+
+- Reuse geometries and materials where appropriate.
+- Avoid per-frame object allocations.
+- Do not create new lights for each facial feature or animation state.
+- Prefer emissive materials for eyes and facial displays.
+- Avoid expensive shadow casters on Low Quality.
+- Keep the robot's floor contact visually readable using an inexpensive shadow or contact cue.
+- Stop or reduce nonessential animation when the robot is not visible or the scene is inactive.
+- Dispose of resources correctly when the robot is removed.
+- Preserve compatibility with the existing renderer, scene, player controls, camera, and adaptive quality settings.
+
+The robot must remain visually recognizable in Low, Medium, and High Quality. Low Quality may simplify its lighting, but must not remove its face or break its expression.
+
+---
+
+# PART 3 — MAKE THE PROJECT READY FOR REAL PORTFOLIO INTEGRATION
+
+## Important architectural context
+
+This current project is a standalone implementation and testing environment for the interactive portfolio experience.
+
+After the visual and functional improvements are finished, I intend to move or merge the relevant code into my existing portfolio website.
+
+The existing production portfolio website will be the source of truth for my actual profile information, projects, skills, certificates, social links, and feedback data.
+
+I will connect the appropriate API or backend integration during the integration stage.
+
+**Do not assume that the current standalone project already has a working connection to my production backend. Do not invent a backend contract or claim that the API is connected when it is not.**
+
+The current task is to make the code clean, reusable, and integration-ready.
+
+Do not build an entirely new production portfolio application. Improve the existing standalone experience so its components can be integrated into the original website without unnecessary rewrites.
+
+## A. Separate the 3D experience from portfolio content
+
+Review the current application structure and keep responsibilities clearly separated.
+
+The intended conceptual structure is:
+
+### 1. World and game layer
+
+Owns the 3D environment, character, robot, camera, movement, rendering, billboards, interaction detection, and zone transitions.
+
+It should not contain hardcoded copies of my personal information, project descriptions, contact URLs, or review text.
+
+### 2. Portfolio presentation layer
+
+Owns the visual presentation and interaction behavior of About, Projects, Skills, Certificates, Contact, and Feedback.
+
+It should render the selected record or current dataset rather than duplicating the information in different components.
+
+### 3. Data-access layer
+
+Owns fetching, normalization, caching, and submission of portfolio data.
+
+Continue using and improving the existing `PortfolioRepository` and data models where appropriate.
+
+### 4. Integration boundary
+
+Provides a clear, documented entry point for embedding the experience into the existing production website.
+
+It should define the configuration and data contracts the host application is expected to provide.
+
+Do not introduce an unnecessarily complicated plugin system or dependency injection framework. Keep this boundary practical and proportionate to the existing codebase.
+
+## B. Preserve the existing portfolio zones
+
+Keep the six main billboards and their current intended behavior:
+
+- About Me.
+- Projects.
+- Skills.
+- Certificates.
+- Contact and Social Links.
+- Feedback and Reviews.
+
+Preserve the dedicated zones, dynamically arranged billboards, interaction prompts, return-to-home navigation, Quick View, and accessible detail panels.
+
+Each billboard must continue to obtain its summary and action from the correct data model.
+
+The detail view must use the corresponding real record where data exists.
+
+A project board must open its own selected project, a social board must use its own actual destination, a certificate board must display its own record, and review pagination must use the correct page of reviews.
+
+Do not allow visual or architectural refactoring to break these relationships.
+
+## C. Standardize the data contract
+
+Inspect the current portfolio types and repository.
+
+Reuse the current schema wherever possible rather than introducing competing models.
+
+Ensure the architecture can represent the following content:
+
+- Profile and biography.
+- Projects.
+- Skills and skill categories.
+- Certificates.
+- Contact methods and social links.
+- Published feedback and reviews.
+- Feedback submission.
+
+Use stable identifiers when records have them.
+
+Ensure each billboard references an appropriate record or section action, rather than depending on its displayed title or array position to determine behavior.
+
+The system must continue supporting empty states when the backend contains no records for an optional category.
+
+Do not fabricate projects, credentials, reviews, URLs, user metrics, or personal details.
+
+If current development data contains unverified content, keep it clearly separated from production data and document what needs verification.
+
+## D. Keep the data source replaceable
+
+The current project must support replacing local development data with a real API implementation without rewriting the 3D scene.
+
+The scene should consume normalized portfolio data through the existing repository or a clearly defined equivalent.
+
+Avoid direct network requests scattered throughout the scene components.
+
+Do not embed API URLs or authentication logic inside `WorldScene.ts`, `HologramBillboard.ts`, or the robot component.
+
+If the current backend configuration is missing:
+
+- Keep the existing adapter ready for later configuration.
+- Document the expected API contract only when that contract is actually defined.
+- Keep development data isolated.
+- Handle unavailable data honestly.
+- Do not modify production backend settings or introduce fake persistence.
+
+Use only public client-safe configuration in browser code. Never expose private keys, service-role credentials, or server secrets.
+
+## E. Prepare a clear integration entry point
+
+Inspect the existing `App.tsx` and the surrounding component architecture.
+
+Provide a documented integration component or entry point that allows the original portfolio website to embed the 3D experience into an existing page or route.
+
+Use a suitable existing component if one already serves this purpose.
+
+The integration boundary should make it possible for the host website to supply or configure:
+
+- The data repository or data adapter.
+- The initial entry mode, such as the 3D world or Quick View.
+- Optional callbacks for navigation to host-website routes, if required.
+- Any other configuration genuinely necessary for integration.
+
+Do not pass unnecessary configuration props merely for abstraction.
+
+The embedded experience must avoid taking over the host website's global routing, document structure, or global styles.
+
+Review the existing CSS for global selectors, conflicting styles, and overlays that might affect the rest of the production website.
+
+Keep styles scoped appropriately. Avoid unnecessary changes to global `body`, universal selectors, or global element behavior.
+
+Avoid introducing duplicate WebGL renderers or background scenes when mounting and unmounting the experience.
+
+If the host website already has a common layout, data-fetching layer, or routing architecture, the integration should be able to reuse it rather than duplicate it.
+
+## F. Document the integration procedure
+
+Create a practical integration document, using the project's existing documentation convention or a clear new integration guide.
+
+It should explain:
+
+1. Which directories and files belong to the reusable 3D experience.
+2. Which files contain portfolio content and data contracts.
+3. Which files are specific to the standalone demo.
+4. Which existing dependencies are required.
+5. Which environment variables are required and whether they must be server-side or client-safe.
+6. How to mount the 3D experience into an existing React page or route.
+7. How to connect the original website's portfolio data or API repository.
+8. How the integration should preserve the original site's routing, styles, and components.
+9. Which components can be kept independent and which require adaptation.
+10. How to test the integration before deployment.
+
+Do not tell me to copy files blindly without explaining their dependencies.
+
+Do not claim that the experience can be integrated by copying a single file if it actually depends on many modules, assets, styles, or libraries.
+
+The purpose is to minimize the work required to integrate the experience later and make that work predictable.
+
+---
+
+# PART 4 — PRESERVE AND VERIFY THE MOBILE PERFORMANCE SYSTEM
+
+The project already has Auto, Low, Medium, and High quality modes.
+
+Preserve the current adaptive quality implementation, runtime quality governor, lightweight fallback, lazy-loading behavior, shared resources, and render-loop lifecycle management.
+
+Do not replace the existing system with a second implementation.
+
+## A. Regression checks
+
+After changing the floor, robot, and integration architecture, verify:
+
+- Switching between every quality mode still works.
+- Low Quality does not return to the black floor problem.
+- The face is visible and recognizable in every quality mode.
+- Greeting animations remain coordinated at different frame rates.
+- The robot does not leave detached geometries, materials, or textures behind.
+- Player movement, camera dragging, and touch controls remain responsive.
+- All six main billboards remain accessible.
+- The six zones still function.
+- Return-to-home navigation works from each zone.
+- Quick View still works.
+- The WebGL-unavailable fallback still provides access to portfolio content.
+- Modals and hidden tabs do not cause unnecessary scene rendering.
+- No duplicated render loops are introduced.
+- Resource cleanup and WebGL context recovery remain intact.
+
+## B. Low-end hardware safeguards
+
+Continue treating mobile as a primary target.
+
+Do not increase geometry detail, particle count, lighting cost, or texture resolution merely to improve the desktop version of the robot.
+
+Prefer a model and animation setup that produces a good result with relatively few meshes, shared materials, and simple transforms.
+
+If the device is under sustained rendering pressure, keep the existing adaptive downgrade behavior.
+
+A brief greeting animation must not cause excessive frame spikes or pause player input.
+
+The Quick View must remain a practical fallback for devices that cannot deliver a comfortable 3D experience.
+
+Do not claim a specific FPS improvement unless it has been measured on actual hardware.
+
+---
+
+# PART 5 — IMPLEMENTATION WORKFLOW
+
+Perform the actual changes in the current codebase.
+
+Follow this order:
+
+1. Inspect the current floor material, quality transitions, robot geometry, facial features, animation system, and existing integration structure.
+2. Identify the specific causes of the floor's black appearance and the robot's visual errors.
+3. Fix the floor while retaining the low-cost rendering approach.
+4. Refine the robot's geometry, facial expressions, greeting animation, and idle behavior.
+5. Improve module boundaries and prepare the integration entry point.
+6. Write the integration documentation.
+7. Run the existing TypeScript checks, production build, and automated tests.
+8. Fix any errors or regressions introduced by your changes.
+9. Verify the interaction and zone navigation behavior using the available test tools.
+10. Review the diff to ensure that working functionality and previous optimizations have not been unintentionally removed.
+
+Do not stop after writing a plan or creating documentation. Implement the actual code changes.
+
+Do not generate a new application, replace the existing world, or remove the current portfolio functionality.
+
+Avoid unrelated redesigns.
+
+---
+
+# PART 6 — FINAL VERIFICATION REPORT
+
+When finished, provide a concise, factual report containing:
+
+## Floor
+- The actual cause of the black appearance.
+- The specific fix.
+- The visual behavior of High, Medium, and Low.
+- Whether runtime switching was verified.
+
+## Companion robot
+- Which geometry or hierarchy issues were found.
+- Which model improvements were implemented.
+- How the face, smile, greeting, and idle behavior work.
+- How animation and rendering cost are controlled.
+
+## Integration readiness
+- Which files now form the reusable 3D experience.
+- Which parts remain specific to the standalone demo.
+- How the production website can embed the experience.
+- What configuration the host application must supply.
+- Whether the repository can use a different real API implementation without modifying the 3D scene.
+- Which integration steps still require access to the production repository or backend.
+
+## Verification
+- Actual results of the TypeScript checks, build, and tests.
+- Any regressions found and fixed.
+- Any issues still unresolved.
+- Real-device performance tests that remain outstanding.
+
+Do not fabricate results or claim successful production integration without testing it against the actual production website.
+
+# FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when:
+
+- Low Quality retains the floor's original color identity without restoring expensive lighting effects.
+- The robot has a recognizable, properly aligned face with real neutral and smiling expressions.
+- The greeting animation coordinates the smile, arm wave, and body movement naturally.
+- Existing player controls, zones, billboards, Quick View, and navigation remain functional.
+- Previous mobile performance optimizations remain intact.
+- Portfolio data is separated from the 3D rendering components.
+- The project has a clear integration entry point and practical integration documentation.
+- No fake personal data or fake backend persistence is introduced.
+- The project passes the available build, type checks, and automated tests, with results reported honestly.
+
+**Overall goal:** Create a polished and expressive futuristic world with a friendly robotic companion, preserve the original aesthetic even on Low Quality, and make the current project easy to integrate into my real portfolio website and connect to its API later, without rebuilding the game or sacrificing the mobile experience.

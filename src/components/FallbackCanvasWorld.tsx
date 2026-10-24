@@ -12,7 +12,7 @@ import {
   RenderActivityMode,
   WorldBillboardNode,
 } from '../types/portfolio';
-import { INITIAL_ORBS } from '../data/portfolioData';
+import { DEFAULT_WORLD_ORBS } from '../game/worldOrbs';
 import { clampToPlazaBounds, distanceXZ, isWithinProximity } from '../game/portfolioLogic';
 import { ZoneLayoutResult } from '../game/zoneLayout';
 import { synthAudio } from '../audio/synthAudio';
@@ -39,6 +39,7 @@ export interface FallbackWorldProps {
 export interface FallbackWorldHandle {
   warpToNode: (nodeId: string) => void;
   triggerRobotWave: () => void;
+  triggerRobotGreeting: () => void;
   setVirtualInput: (forward: number, strafe: number) => void;
   triggerJump: () => void;
   resetSimulation: () => void;
@@ -103,7 +104,7 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
       },
       keys: new Set<string>(),
       virtualMove: { forward: 0, strafe: 0 },
-      orbs: INITIAL_ORBS.map((o) => ({ ...o, collected: false })),
+      orbs: DEFAULT_WORLD_ORBS.map((o) => ({ ...o, collected: false })),
       collectedCount: 0,
       nearestNode: null as WorldBillboardNode | null,
       images: new Map<string, HTMLImageElement>(),
@@ -157,6 +158,11 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         stateRef.current.robot.wavePhase = 0;
         synthAudio.playRobotChirp('wave');
       },
+      triggerRobotGreeting: () => {
+        stateRef.current.robot.isWaving = true;
+        stateRef.current.robot.wavePhase = 0;
+        synthAudio.playRobotChirp('wave');
+      },
       setVirtualInput: (forward: number, strafe: number) => {
         stateRef.current.virtualMove = { forward, strafe };
       },
@@ -175,7 +181,7 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         stateRef.current.robot.isJumping = false;
         stateRef.current.robot.isMoving = false;
         stateRef.current.collectedCount = 0;
-        stateRef.current.orbs = INITIAL_ORBS.map((o) => ({ ...o, collected: false }));
+        stateRef.current.orbs = DEFAULT_WORLD_ORBS.map((o) => ({ ...o, collected: false }));
       },
     }));
 
@@ -270,8 +276,9 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
       let cachedDpr = 0;
 
       const syncCanvasSize = () => {
-        const cssW = Math.max(1, window.innerWidth);
-        const cssH = Math.max(1, window.innerHeight);
+        const parent = canvas.parentElement;
+        const cssW = Math.max(1, parent?.clientWidth ?? window.innerWidth);
+        const cssH = Math.max(1, parent?.clientHeight ?? window.innerHeight);
         const dpr = Math.min(window.devicePixelRatio || 1, profile.maxPixelRatio);
         if (cssW !== cachedCssW || cssH !== cachedCssH || dpr !== cachedDpr) {
           cachedCssW = cssW;
@@ -589,7 +596,7 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
           }
         }
 
-        // Draw companion robot
+        // Draw companion robot (charcoal/navy chassis, cyan/purple accents, symmetrical eyes + mouth)
         const rpt = worldToScreen(robot.x, robot.z, robot.y);
         const shadowPt = worldToScreen(robot.x, robot.z, 0);
 
@@ -598,38 +605,96 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         ctx.ellipse(shadowPt.x, shadowPt.y, scale * 0.8, scale * 0.4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        const bodyW = scale * 0.85;
-        const bodyH = scale * 1.0;
-        ctx.fillStyle = '#161c28';
-        ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = 1.5;
+        const bodyW = scale * 0.82;
+        const bodyH = scale * 0.96;
+
+        // Left & right arms (right arm lifts and waves during greeting)
+        ctx.strokeStyle = '#0d1526';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(4, scale * 0.14);
+        ctx.beginPath();
+        ctx.moveTo(rpt.x - bodyW * 0.52, rpt.y - bodyH * 0.78);
+        ctx.lineTo(rpt.x - bodyW * 0.68, rpt.y - bodyH * 0.34);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(rpt.x + bodyW * 0.52, rpt.y - bodyH * 0.78);
+        if (robot.isWaving) {
+          const waveOffset = Math.sin(robot.wavePhase) * scale * 0.22;
+          ctx.lineTo(rpt.x + bodyW * 0.78 + waveOffset, rpt.y - bodyH * 1.28);
+        } else {
+          ctx.lineTo(rpt.x + bodyW * 0.68, rpt.y - bodyH * 0.34);
+        }
+        ctx.stroke();
+
+        // Charcoal torso + navy trim
+        ctx.fillStyle = '#1b2230';
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.roundRect(rpt.x - bodyW / 2, rpt.y - bodyH, bodyW, bodyH, 10);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#f59e0b';
+        // Cyan chest core
+        ctx.fillStyle = '#22d3ee';
         ctx.beginPath();
-        ctx.arc(rpt.x, rpt.y - bodyH * 0.55, 4.5, 0, Math.PI * 2);
+        ctx.arc(rpt.x, rpt.y - bodyH * 0.55, 4.2, 0, Math.PI * 2);
         ctx.fill();
 
-        const headW = scale * 0.75;
-        const headH = scale * 0.68;
-        const headY = rpt.y - bodyH - headH * 0.8;
-        ctx.fillStyle = '#161c28';
+        // Head shell
+        const headW = scale * 0.8;
+        const headH = scale * 0.66;
+        const headY = rpt.y - bodyH - headH * 0.88;
+        ctx.fillStyle = '#1b2230';
         ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.roundRect(rpt.x - headW / 2, headY, headW, headH, 11);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#05070a';
-        ctx.fillRect(rpt.x - headW * 0.36, headY + headH * 0.25, headW * 0.72, headH * 0.45);
-        ctx.fillStyle = '#22d3ee';
+        // Visor screen
+        const screenX = rpt.x - headW * 0.38;
+        const screenY = headY + headH * 0.16;
+        const screenW = headW * 0.76;
+        const screenH = headH * 0.68;
+        ctx.fillStyle = '#050811';
         ctx.beginPath();
-        ctx.roundRect(rpt.x - 10, headY + headH * 0.35, 5, 10, 2.5);
-        ctx.roundRect(rpt.x + 5, headY + headH * 0.35, 5, 10, 2.5);
+        ctx.roundRect(screenX, screenY, screenW, screenH, 6);
         ctx.fill();
+
+        // Eyes & Mouth
+        const eyeY = screenY + screenH * 0.38;
+        const eyeOffsetX = Math.max(5, screenW * 0.22);
+        ctx.fillStyle = '#22d3ee';
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 2;
+        if (robot.isBlinking) {
+          ctx.beginPath();
+          ctx.moveTo(rpt.x - eyeOffsetX - 4, eyeY);
+          ctx.lineTo(rpt.x - eyeOffsetX + 4, eyeY);
+          ctx.moveTo(rpt.x + eyeOffsetX - 4, eyeY);
+          ctx.lineTo(rpt.x + eyeOffsetX + 4, eyeY);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.roundRect(rpt.x - eyeOffsetX - 3, eyeY - 5, 6, 9, 3);
+          ctx.roundRect(rpt.x + eyeOffsetX - 3, eyeY - 5, 6, 9, 3);
+          ctx.fill();
+        }
+
+        // Distinct mouth curve (wide smile when waving/moving vs gentle neutral smile)
+        const mouthY = screenY + screenH * 0.72;
+        ctx.beginPath();
+        if (robot.isWaving || robot.isMoving) {
+          ctx.arc(rpt.x, mouthY - 2, Math.max(5, screenW * 0.22), 0.1 * Math.PI, 0.9 * Math.PI);
+          ctx.stroke();
+        } else {
+          ctx.moveTo(rpt.x - 5, mouthY);
+          ctx.quadraticCurveTo(rpt.x, mouthY + 3, rpt.x + 5, mouthY);
+          ctx.stroke();
+        }
       };
 
       let stopped = false;
@@ -677,6 +742,14 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         }
       };
 
+      const resizeObserver =
+        typeof ResizeObserver !== 'undefined' && canvas.parentElement
+          ? new ResizeObserver(handleResize)
+          : null;
+      if (resizeObserver && canvas.parentElement) {
+        resizeObserver.observe(canvas.parentElement);
+      }
+
       window.addEventListener('resize', handleResize);
       document.addEventListener('visibilitychange', handleVisibility);
 
@@ -687,6 +760,7 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         stopped = true;
         cancelAnimationFrame(animId);
         clearTimeout(throttleTimer);
+        resizeObserver?.disconnect();
         window.removeEventListener('resize', handleResize);
         document.removeEventListener('visibilitychange', handleVisibility);
       };

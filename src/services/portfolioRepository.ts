@@ -9,19 +9,13 @@ import {
   FeedbackSubmissionPayload,
   FeedbackSubmissionResult,
   PaginatedReviewsResult,
+  PortfolioDataSource,
   PortfolioOverviewData,
   ProfileData,
   ProjectItem,
   ReviewItem,
   SkillCategoryGroup,
 } from '../types/portfolio';
-import {
-  LOCAL_CERTIFICATES_DATA,
-  LOCAL_PROFILE_DATA,
-  LOCAL_PROJECTS_DATA,
-  LOCAL_SKILL_CATEGORIES,
-  readConfiguredEnvContacts,
-} from '../data/portfolioData';
 
 export const REVIEWS_PER_PAGE = 3;
 
@@ -47,10 +41,123 @@ export interface RemotePortfolioTransport {
   ) => Promise<{ ok: boolean; message?: string; review?: ReviewItem }>;
 }
 
+export interface PortfolioRepositoryOptions {
+  /**
+   * Optional fallback snapshot returned when `VITE_PORTFOLIO_API_URL` is not configured
+   * or unreachable. Defaults to an honest empty `PortfolioOverviewData` snapshot so
+   * production integrations never display unverified demo data.
+   */
+  fallbackOverview?: PortfolioOverviewData;
+  /**
+   * Optional explicit environment dictionary used to resolve `VITE_PORTFOLIO_*` public contact links.
+   */
+  envRecord?: Record<string, string | undefined>;
+}
+
+/**
+ * Reads only explicitly configured public contact endpoints from environment variables.
+ * Never fabricates missing social accounts or email addresses.
+ */
+export function readConfiguredEnvContacts(
+  envRecord?: Record<string, string | undefined>
+): ContactLinkItem[] {
+  const env: Record<string, string | undefined> =
+    envRecord ??
+    ((typeof import.meta !== 'undefined' &&
+      (import.meta as unknown as { env?: Record<string, string | undefined> }).env) ||
+      {});
+
+  const rawCandidates: Array<{
+    id: string;
+    platform: string;
+    kind: ContactLinkItem['kind'];
+    rawValue?: string;
+    description: string;
+    accentColor: string;
+  }> = [
+    {
+      id: 'contact-github',
+      platform: 'GitHub',
+      kind: 'social',
+      rawValue: env.VITE_PORTFOLIO_GITHUB_URL,
+      description: 'Open source repositories and engineering codebases',
+      accentColor: '#38bdf8',
+    },
+    {
+      id: 'contact-linkedin',
+      platform: 'LinkedIn',
+      kind: 'social',
+      rawValue: env.VITE_PORTFOLIO_LINKEDIN_URL,
+      description: 'Professional profile and career network',
+      accentColor: '#22d3ee',
+    },
+    {
+      id: 'contact-website',
+      platform: 'Website',
+      kind: 'website',
+      rawValue: env.VITE_PORTFOLIO_WEBSITE_URL,
+      description: 'Primary web domain and technical publications',
+      accentColor: '#14b8a6',
+    },
+    {
+      id: 'contact-facebook',
+      platform: 'Facebook',
+      kind: 'social',
+      rawValue: env.VITE_PORTFOLIO_FACEBOOK_URL,
+      description: 'Social updates and community page',
+      accentColor: '#818cf8',
+    },
+    {
+      id: 'contact-email',
+      platform: 'Email',
+      kind: 'email',
+      rawValue: env.VITE_PORTFOLIO_EMAIL,
+      description: 'Direct electronic mail inquiry',
+      accentColor: '#f59e0b',
+    },
+  ];
+
+  const valid: ContactLinkItem[] = [];
+  for (const item of rawCandidates) {
+    const trimmed = item.rawValue?.trim();
+    if (!trimmed) continue;
+
+    if (item.kind === 'email') {
+      const href = trimmed.toLowerCase().startsWith('mailto:') ? trimmed : `mailto:${trimmed}`;
+      const address = href.replace(/^mailto:/i, '').trim();
+      if (address.includes('@') && !address.includes(' ')) {
+        valid.push({
+          id: item.id,
+          platform: item.platform,
+          kind: 'email',
+          url: href,
+          handleOrLabel: address,
+          description: item.description,
+          accentColor: item.accentColor,
+        });
+      }
+    } else if (/^https?:\/\/[^\s]+$/i.test(trimmed)) {
+      valid.push({
+        id: item.id,
+        platform: item.platform,
+        kind: item.kind,
+        url: trimmed,
+        handleOrLabel: trimmed.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''),
+        description: item.description,
+        accentColor: item.accentColor,
+      });
+    }
+  }
+
+  return valid;
+}
+
 /**
  * Sanitizes and filters contact links so missing, blank, or unsafe URLs never render boards.
  */
-export function normalizeValidContactLinks(items: ContactLinkItem[] | undefined | null): ContactLinkItem[] {
+export function normalizeValidContactLinks(
+  items: ContactLinkItem[] | undefined | null
+): ContactLinkItem[] {
   if (!Array.isArray(items)) return [];
   const valid: ContactLinkItem[] = [];
 
@@ -146,12 +253,113 @@ export function paginateReviewsCollection(
 }
 
 /**
+ * Creates a clean, honest, empty `PortfolioOverviewData` snapshot containing zero fabricated
+ * projects, skills, certificates, contacts, or visitor reviews. Ideal as an initial loading
+ * placeholder or unconfigured baseline when embedding into a production portfolio website.
+ */
+export function createEmptyPortfolioOverview(
+  profileOverrides?: Partial<ProfileData>
+): PortfolioOverviewData {
+  return {
+    profile: {
+      id: profileOverrides?.id ?? 'profile',
+      name: profileOverrides?.name ?? 'Portfolio',
+      title: profileOverrides?.title ?? 'Interactive 3D Portfolio',
+      subtitle: profileOverrides?.subtitle,
+      period: profileOverrides?.period,
+      shortBio:
+        profileOverrides?.shortBio ??
+        'Connect your portfolio data source or API adapter to populate biography, projects, skills, credentials, and contact channels.',
+      biography: profileOverrides?.biography ?? [
+        'This 3D portfolio experience is awaiting data from its configured PortfolioDataSource.',
+      ],
+      specializations: profileOverrides?.specializations ?? [],
+      highlights: profileOverrides?.highlights ?? [],
+      metrics: profileOverrides?.metrics,
+      careerOrEducation: profileOverrides?.careerOrEducation,
+      links: profileOverrides?.links,
+      portraitUrl: profileOverrides?.portraitUrl,
+      accentColor: profileOverrides?.accentColor ?? '#22d3ee',
+    },
+    projects: [],
+    skillCategories: [],
+    certificates: [],
+    contacts: readConfiguredEnvContacts(),
+    reviewsPreview: paginateReviewsCollection([], 1, REVIEWS_PER_PAGE, 'unconfigured'),
+    backendConnected: false,
+    dataSourceLabel: 'Awaiting Portfolio Data Source',
+  };
+}
+
+/**
+ * Convenience adapter that wraps pre-loaded or framework-fetched portfolio records
+ * (e.g. from Next.js Server Components, React Query, or an existing host store)
+ * into a standard `PortfolioDataSource` without extra HTTP calls.
+ */
+export function createStaticPortfolioDataSource(
+  overview: PortfolioOverviewData,
+  options?: {
+    reviews?: ReviewItem[];
+    onSubmitFeedback?: (
+      payload: FeedbackSubmissionPayload,
+      signal?: AbortSignal
+    ) => Promise<FeedbackSubmissionResult>;
+  }
+): PortfolioDataSource {
+  const allReviews = options?.reviews ?? overview.reviewsPreview.items;
+  const normalizedOverview: PortfolioOverviewData = {
+    ...overview,
+    contacts: normalizeValidContactLinks(overview.contacts),
+    reviewsPreview: options?.reviews
+      ? paginateReviewsCollection(
+          options.reviews,
+          1,
+          REVIEWS_PER_PAGE,
+          overview.backendConnected ? 'remote' : 'unconfigured'
+        )
+      : overview.reviewsPreview,
+  };
+
+  return {
+    isBackendConfigured: () => overview.backendConnected || Boolean(options?.onSubmitFeedback),
+    getOverview: async () => normalizedOverview,
+    getReviewsPage: async (page = 1, pageSize = REVIEWS_PER_PAGE) =>
+      paginateReviewsCollection(
+        allReviews,
+        page,
+        pageSize,
+        overview.backendConnected ? 'remote' : 'unconfigured'
+      ),
+    submitFeedback: async (payload, signal) => {
+      const validation = validateFeedbackPayload(payload);
+      if (!validation.valid) {
+        return {
+          ok: false,
+          persisted: false,
+          status: 'validation_error',
+          message: validation.error,
+        };
+      }
+      if (!options?.onSubmitFeedback) {
+        return {
+          ok: false,
+          persisted: false,
+          status: 'backend_unconfigured',
+          message:
+            'Feedback submission handler is not configured on this PortfolioDataSource.',
+        };
+      }
+      return options.onSubmitFeedback(validation.sanitized, signal);
+    },
+  };
+}
+
+/**
  * Validates feedback submission payload before network transmission.
  */
 export function validateFeedbackPayload(
   payload: FeedbackSubmissionPayload
 ): { valid: true; sanitized: FeedbackSubmissionPayload } | { valid: false; error: string } {
-  // Silent anti-spam honeypot check
   if (payload.honeypot && payload.honeypot.trim().length > 0) {
     return { valid: false, error: 'Automated spam submission rejected.' };
   }
@@ -203,12 +411,13 @@ export function validateFeedbackPayload(
   };
 }
 
-function createDefaultHttpTransport(): RemotePortfolioTransport {
+export function createDefaultHttpTransport(apiBaseUrlOverride?: string): RemotePortfolioTransport {
   const rawBase =
-    (typeof import.meta !== 'undefined' &&
+    apiBaseUrlOverride ??
+    ((typeof import.meta !== 'undefined' &&
       (import.meta as unknown as { env?: Record<string, string | undefined> }).env
         ?.VITE_PORTFOLIO_API_URL) ||
-    '';
+      '');
   const apiBaseUrl = rawBase.trim().replace(/\/$/, '');
   const isConfigured = apiBaseUrl.length > 0;
 
@@ -267,15 +476,19 @@ function createDefaultHttpTransport(): RemotePortfolioTransport {
   };
 }
 
-export class PortfolioRepository {
+export class PortfolioRepository implements PortfolioDataSource {
   private transport: RemotePortfolioTransport;
+  private fallbackOverview: PortfolioOverviewData;
+  private envRecord?: Record<string, string | undefined>;
   private overviewCache: PortfolioOverviewData | null = null;
   private inflightOverview: Promise<PortfolioOverviewData> | null = null;
   private reviewsPageCache = new Map<string, PaginatedReviewsResult>();
   private lastAcceptedSubmitAt = 0;
 
-  constructor(transport?: RemotePortfolioTransport) {
+  constructor(transport?: RemotePortfolioTransport, options?: PortfolioRepositoryOptions) {
     this.transport = transport ?? createDefaultHttpTransport();
+    this.envRecord = options?.envRecord;
+    this.fallbackOverview = options?.fallbackOverview ?? createEmptyPortfolioOverview();
   }
 
   public isBackendConfigured(): boolean {
@@ -303,7 +516,11 @@ export class PortfolioRepository {
     }
 
     const loader = async (): Promise<PortfolioOverviewData> => {
-      const envContacts = readConfiguredEnvContacts();
+      const envContacts = readConfiguredEnvContacts(this.envRecord);
+      const baseFallbackContacts =
+        envContacts.length > 0
+          ? envContacts
+          : normalizeValidContactLinks(this.fallbackOverview.contacts);
 
       if (this.transport.isConfigured && this.transport.fetchOverview) {
         try {
@@ -317,15 +534,17 @@ export class PortfolioRepository {
           this.reviewsPageCache.set(`1:${REVIEWS_PER_PAGE}`, reviewsPreview);
 
           const data: PortfolioOverviewData = {
-            profile: remote.profile ?? LOCAL_PROFILE_DATA,
-            projects: Array.isArray(remote.projects) ? remote.projects : LOCAL_PROJECTS_DATA,
+            profile: remote.profile ?? this.fallbackOverview.profile,
+            projects: Array.isArray(remote.projects)
+              ? remote.projects
+              : this.fallbackOverview.projects,
             skillCategories: Array.isArray(remote.skillCategories)
               ? remote.skillCategories
-              : LOCAL_SKILL_CATEGORIES,
+              : this.fallbackOverview.skillCategories,
             certificates: Array.isArray(remote.certificates)
               ? remote.certificates
-              : LOCAL_CERTIFICATES_DATA,
-            contacts: normalizeValidContactLinks(remote.contacts ?? envContacts),
+              : this.fallbackOverview.certificates,
+            contacts: normalizeValidContactLinks(remote.contacts ?? baseFallbackContacts),
             reviewsPreview,
             backendConnected: true,
             dataSourceLabel: 'Connected Portfolio API',
@@ -338,14 +557,11 @@ export class PortfolioRepository {
           }
           const fallbackReviews = paginateReviewsCollection([], 1, REVIEWS_PER_PAGE, 'unconfigured');
           const fallback: PortfolioOverviewData = {
-            profile: LOCAL_PROFILE_DATA,
-            projects: LOCAL_PROJECTS_DATA,
-            skillCategories: LOCAL_SKILL_CATEGORIES,
-            certificates: LOCAL_CERTIFICATES_DATA,
-            contacts: envContacts,
+            ...this.fallbackOverview,
+            contacts: baseFallbackContacts,
             reviewsPreview: fallbackReviews,
             backendConnected: false,
-            dataSourceLabel: 'Local Repository Fallback (Backend Unreachable)',
+            dataSourceLabel: 'Fallback Snapshot (Backend Unreachable)',
             loadError:
               err instanceof Error ? err.message : 'Unable to reach configured portfolio backend.',
           };
@@ -358,14 +574,11 @@ export class PortfolioRepository {
       this.reviewsPageCache.set(`1:${REVIEWS_PER_PAGE}`, emptyReviews);
 
       const localOverview: PortfolioOverviewData = {
-        profile: LOCAL_PROFILE_DATA,
-        projects: LOCAL_PROJECTS_DATA,
-        skillCategories: LOCAL_SKILL_CATEGORIES,
-        certificates: LOCAL_CERTIFICATES_DATA,
-        contacts: envContacts,
+        ...this.fallbackOverview,
+        contacts: baseFallbackContacts,
         reviewsPreview: emptyReviews,
         backendConnected: false,
-        dataSourceLabel: 'Local Repository Data (VITE_PORTFOLIO_API_URL not yet connected)',
+        dataSourceLabel: this.fallbackOverview.dataSourceLabel,
       };
       this.overviewCache = localOverview;
       return localOverview;
@@ -441,7 +654,7 @@ export class PortfolioRepository {
         persisted: false,
         status: 'backend_unconfigured',
         message:
-          'Feedback persistence is not yet connected to a live backend server. Configure VITE_PORTFOLIO_API_URL (POST /feedback) to store visitor reviews permanently.',
+          'Feedback persistence is not yet connected to a live backend server. Configure VITE_PORTFOLIO_API_URL (POST /feedback) or provide a production PortfolioDataSource to store visitor reviews.',
       };
     }
 
@@ -486,9 +699,10 @@ export class PortfolioRepository {
 }
 
 export function createPortfolioRepository(
-  transport?: RemotePortfolioTransport
+  transport?: RemotePortfolioTransport,
+  options?: PortfolioRepositoryOptions
 ): PortfolioRepository {
-  return new PortfolioRepository(transport);
+  return new PortfolioRepository(transport, options);
 }
 
 export const portfolioRepository = new PortfolioRepository();

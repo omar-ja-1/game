@@ -5,18 +5,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { VisitorSignal } from '../types/portfolio';
-import { INITIAL_VISITOR_SIGNALS } from '../data/portfolioData';
 import { synthAudio } from '../audio/synthAudio';
 
 interface BeaconModalProps {
   orbsCollected: number;
   totalOrbs: number;
+  initialSignals?: VisitorSignal[];
   onClose: () => void;
 }
 
 export const BeaconModal: React.FC<BeaconModalProps> = ({
   orbsCollected,
   totalOrbs,
+  initialSignals = [],
   onClose,
 }) => {
   const isComplete = orbsCollected >= totalOrbs;
@@ -28,7 +29,7 @@ export const BeaconModal: React.FC<BeaconModalProps> = ({
     } catch {
       // fallback
     }
-    return INITIAL_VISITOR_SIGNALS;
+    return initialSignals;
   });
 
   const [name, setName] = useState('');
@@ -74,8 +75,8 @@ export const BeaconModal: React.FC<BeaconModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-[#04060a]/85 text-white select-none touch-auto animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl max-h-[90vh] bg-[#090d16] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-[#04060a]/85 text-white select-none touch-auto animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl max-h-[90%] bg-[#090d16] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0c121d]">
           <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">

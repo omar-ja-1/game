@@ -7,7 +7,11 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CompanionRobot } from './CompanionRobot';
 import { BillboardSharedResources, HologramBillboard } from './HologramBillboard';
-import { SharedTexturePool, createFloorGridTexture } from './proceduralAssets';
+import {
+  FLOOR_VISUAL_CONFIG,
+  SharedTexturePool,
+  createFloorGridTexture,
+} from './proceduralAssets';
 import {
   MAX_AMBIENT_DUST_PARTICLES,
   QUALITY_PROFILES,
@@ -17,7 +21,7 @@ import {
   gatherDeviceCapabilitySignals,
   resolveQualityProfile,
 } from './qualityConfig';
-import { INITIAL_ORBS } from '../data/portfolioData';
+import { DEFAULT_WORLD_ORBS } from '../game/worldOrbs';
 import { clampToPlazaBounds, isWithinProximity, distanceXZ } from '../game/portfolioLogic';
 import { ZoneLayoutResult } from '../game/zoneLayout';
 import { synthAudio } from '../audio/synthAudio';
@@ -146,6 +150,7 @@ export class WorldScene {
   private floorStandardMat: THREE.MeshStandardMaterial;
   private floorLightweightMat: THREE.MeshLambertMaterial;
   private floorMesh: THREE.Mesh;
+  private plazaGuideRingMat!: THREE.MeshBasicMaterial;
   private currentFloorTexSize: number;
 
   private pylonInstanced!: THREE.InstancedMesh;
@@ -189,6 +194,8 @@ export class WorldScene {
   private perfFrameCount: number = 0;
   private perfFrameMsSum: number = 0;
   private perfWindowStart: number = performance.now();
+  private lastRobotTapGreetingAt: number = -10;
+  private resizeObserver: ResizeObserver | null = null;
 
   private ownedGeometries: THREE.BufferGeometry[] = [];
   private ownedMaterials: THREE.Material[] = [];
@@ -290,20 +297,30 @@ export class WorldScene {
 
     this.floorStandardMat = this.trackMaterial(
       new THREE.MeshStandardMaterial({
-        color: 0x090d16,
+        color: FLOOR_VISUAL_CONFIG.standardBaseColor,
         map: this.floorTexture,
-        roughness: 0.28,
-        metalness: 0.65,
+        roughness:
+          this.qualityProfile.tier === 'medium'
+            ? FLOOR_VISUAL_CONFIG.standardRoughnessMedium
+            : FLOOR_VISUAL_CONFIG.standardRoughnessHigh,
+        metalness: FLOOR_VISUAL_CONFIG.standardMetalness,
+        envMapIntensity:
+          this.qualityProfile.tier === 'medium'
+            ? FLOOR_VISUAL_CONFIG.standardEnvIntensityMedium
+            : FLOOR_VISUAL_CONFIG.standardEnvIntensityHigh,
+        emissive: FLOOR_VISUAL_CONFIG.standardEmissiveColor,
+        emissiveIntensity: FLOOR_VISUAL_CONFIG.standardEmissiveIntensity,
       })
     );
 
+    // Low Quality keeps inexpensive MeshLambertMaterial (zero specular/IBL/shadow cost)
+    // while omitting emissiveMap so nocturnal navy/charcoal tiles stay legible instead of black.
     this.floorLightweightMat = this.trackMaterial(
       new THREE.MeshLambertMaterial({
-        color: 0x101827,
+        color: FLOOR_VISUAL_CONFIG.lowBaseColor,
         map: this.floorTexture,
-        emissive: 0x0b1526,
-        emissiveMap: this.floorTexture,
-        emissiveIntensity: 0.85,
+        emissive: FLOOR_VISUAL_CONFIG.lowEmissiveColor,
+        emissiveIntensity: FLOOR_VISUAL_CONFIG.lowEmissiveIntensity,
       })
     );
 
@@ -315,6 +332,9 @@ export class WorldScene {
     this.floorMesh.position.y = 0;
     this.floorMesh.receiveShadow = !this.isSoftwareGl && this.qualityProfile.shadowsEnabled;
     this.scene.add(this.floorMesh);
+
+    // Lightweight static promenade guide rings for spatial depth across all quality profiles
+    this.createPlazaGuideRings(options.initialZoneLayout.theme.accentHex);
 
     // Instanced Perimeter Boundary Pylons
     this.createPerimeterPylons(options.initialZoneLayout.boundsRadius + 2.5);
@@ -403,7 +423,16 @@ export class WorldScene {
       }
     }
 
-    // Swap lightweight vs PBR floor material cleanly
+    // Swap lightweight vs PBR floor material cleanly and tune Medium vs High PBR parameters
+    this.floorStandardMat.roughness =
+      profile.tier === 'medium'
+        ? FLOOR_VISUAL_CONFIG.standardRoughnessMedium
+        : FLOOR_VISUAL_CONFIG.standardRoughnessHigh;
+    this.floorStandardMat.envMapIntensity =
+      profile.tier === 'medium'
+        ? FLOOR_VISUAL_CONFIG.standardEnvIntensityMedium
+        : FLOOR_VISUAL_CONFIG.standardEnvIntensityHigh;
+
     const desiredFloorMat = profile.useLightweightFloor
       ? this.floorLightweightMat
       : this.floorStandardMat;
@@ -426,7 +455,6 @@ export class WorldScene {
       this.floorStandardMat.map = this.floorTexture;
       this.floorStandardMat.needsUpdate = true;
       this.floorLightweightMat.map = this.floorTexture;
-      this.floorLightweightMat.emissiveMap = this.floorTexture;
       this.floorLightweightMat.needsUpdate = true;
       oldFloorTex.dispose();
     } else {
@@ -510,6 +538,7 @@ export class WorldScene {
     fog.density = layout.theme.fogDensity;
     this.plazaFill.color.set(layout.theme.accentHex);
     this.pylonTipMat.color.set(layout.theme.accentHex);
+    this.plazaGuideRingMat.color.set(layout.theme.accentHex);
     this.updatePerimeterPylonsRadius(layout.boundsRadius + 2.5);
 
     // Toggle hub-exclusive Spire & Collectible Orbs while preserving collection progress
@@ -576,6 +605,33 @@ export class WorldScene {
       this.checkProximities();
     }
     this.requestStaticRender();
+  }
+
+  private createPlazaGuideRings(initialAccentHex: string) {
+    this.plazaGuideRingMat = this.trackMaterial(
+      new THREE.MeshBasicMaterial({
+        color: initialAccentHex,
+        transparent: true,
+        opacity: 0.22,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+      })
+    );
+
+    const innerGuideGeo = this.trackGeometry(new THREE.RingGeometry(6.65, 6.76, 64));
+    const innerGuide = new THREE.Mesh(innerGuideGeo, this.plazaGuideRingMat);
+    innerGuide.rotation.x = -Math.PI / 2;
+    innerGuide.position.y = 0.014;
+    this.scene.add(innerGuide);
+
+    const outerGuideGeo = this.trackGeometry(new THREE.RingGeometry(19.65, 19.78, 72));
+    const outerGuide = new THREE.Mesh(outerGuideGeo, this.plazaGuideRingMat);
+    outerGuide.rotation.x = -Math.PI / 2;
+    outerGuide.position.y = 0.014;
+    this.scene.add(outerGuide);
   }
 
   private createPerimeterPylons(radius: number) {
@@ -720,7 +776,7 @@ export class WorldScene {
     const shadowGeo = this.trackGeometry(new THREE.PlaneGeometry(1.2, 1.2));
     const glowDecalGeo = this.trackGeometry(new THREE.PlaneGeometry(3.4, 3.4));
 
-    INITIAL_ORBS.forEach((orbData) => {
+    DEFAULT_WORLD_ORBS.forEach((orbData) => {
       const orbGroup = new THREE.Group();
       orbGroup.position.set(...orbData.position);
 
@@ -838,9 +894,20 @@ export class WorldScene {
     this.requestStaticRender();
   }
 
-  public triggerRobotWave() {
-    this.robot.triggerWave();
+  public triggerRobotGreeting() {
+    const dx = this.camera.position.x - this.robot.group.position.x;
+    const dz = this.camera.position.z - this.robot.group.position.z;
+    const cameraYaw = Math.atan2(dx, dz);
+    this.robot.triggerGreeting({
+      faceYaw: cameraYaw,
+      reducedMotion: this.prefersReducedMotion,
+    });
     synthAudio.playRobotChirp('wave');
+    this.requestStaticRender();
+  }
+
+  public triggerRobotWave() {
+    this.triggerRobotGreeting();
   }
 
   public setCameraMode(mode: CameraMode) {
@@ -867,6 +934,11 @@ export class WorldScene {
     window.addEventListener('blur', this.onWindowBlur);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     window.addEventListener('resize', this.onResize);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.onResize());
+      this.resizeObserver.observe(this.container);
+    }
 
     const dom = this.renderer.domElement;
     dom.addEventListener('mousedown', this.onMouseDown);
@@ -974,7 +1046,7 @@ export class WorldScene {
   };
 
   private tryRaycastNearbyBillboard(clientX: number, clientY: number) {
-    if (!this.isSimulationActive || this.billboards.length === 0) return;
+    if (!this.isSimulationActive) return;
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
@@ -983,21 +1055,31 @@ export class WorldScene {
     this.pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
-    // Only raycast against nearby billboards so walking is respected & cost stays O(1)
+    // 1. Raycast against nearby billboards first so board inspection always takes priority
     const nearbyProxies: THREE.Object3D[] = [];
     for (let i = 0; i < this.billboards.length; i++) {
       if (this.billboards[i].isPlayerNearby) {
         nearbyProxies.push(this.billboards[i].hitProxyMesh);
       }
     }
-    if (nearbyProxies.length === 0) return;
+    if (nearbyProxies.length > 0) {
+      const hits = this.raycaster.intersectObjects(nearbyProxies, false);
+      if (hits.length > 0) {
+        const hitNode = hits[0].object.userData.billboardNode as WorldBillboardNode | undefined;
+        if (hitNode) {
+          synthAudio.playHologramScan();
+          this.callbacks.onActivateNode(hitNode, { fromUserGesture: true });
+          return;
+        }
+      }
+    }
 
-    const hits = this.raycaster.intersectObjects(nearbyProxies, false);
-    if (hits.length > 0) {
-      const hitNode = hits[0].object.userData.billboardNode as WorldBillboardNode | undefined;
-      if (hitNode) {
-        synthAudio.playHologramScan();
-        this.callbacks.onActivateNode(hitNode, { fromUserGesture: true });
+    // 2. Deliberate tap/click on the companion robot triggers a friendly greeting (with 3s cooldown)
+    if (this.elapsedSec - this.lastRobotTapGreetingAt >= 3.0 && !this.robot.isWaving) {
+      const robotHits = this.raycaster.intersectObject(this.robot.hitProxyMesh, false);
+      if (robotHits.length > 0) {
+        this.lastRobotTapGreetingAt = this.elapsedSec;
+        this.triggerRobotGreeting();
       }
     }
   }
@@ -1432,7 +1514,7 @@ export class WorldScene {
 
     // 1. Gameplay & Companion Kinematics
     this.updateMovement(dt);
-    this.robot.update(dt, this.elapsedSec);
+    this.robot.update(dt, this.elapsedSec, this.prefersReducedMotion);
     if (this.isSimulationActive) {
       this.checkProximities();
     }
@@ -1566,6 +1648,8 @@ export class WorldScene {
     window.removeEventListener('blur', this.onWindowBlur);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     window.removeEventListener('resize', this.onResize);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
 
     const dom = this.renderer.domElement;
     dom.removeEventListener('mousedown', this.onMouseDown);

@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   ActiveModalView,
+  PortfolioDataSource,
   PortfolioOverviewData,
   ZoneId,
 } from '../types/portfolio';
@@ -15,6 +16,7 @@ import { synthAudio } from '../audio/synthAudio';
 interface StandardPortfolioViewProps {
   overview: PortfolioOverviewData;
   isLoadingData: boolean;
+  dataSource?: PortfolioDataSource;
   onEnter3DWorld: (targetZone?: ZoneId) => void;
   onOpenProjectModal: (modal: ActiveModalView) => void;
   onFeedbackSaved?: () => void;
@@ -28,22 +30,25 @@ function isSafeHttpUrl(url?: string): boolean {
 export const StandardPortfolioView: React.FC<StandardPortfolioViewProps> = ({
   overview,
   isLoadingData,
+  dataSource,
   onEnter3DWorld,
   onOpenProjectModal,
   onFeedbackSaved,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const { profile, projects, skillCategories, certificates, contacts, reviewsPreview } = overview;
 
   const scrollToSection = (sectionId: string) => {
     synthAudio.playButtonClick();
-    const el = document.getElementById(sectionId);
+    const el = containerRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
     <div
+      ref={containerRef}
       data-testid="standard-portfolio-view"
-      className="fixed inset-0 z-40 overflow-y-auto touch-auto select-text bg-[#060911] text-white font-sans"
+      className="absolute inset-0 z-40 overflow-y-auto touch-auto select-text bg-[#060911] text-white font-sans"
     >
       {/* Single Sticky Top Bar (<= 56px height to preserve >= 85% mobile reading viewport) */}
       <header className="sticky top-0 z-20 h-14 bg-[#070b13]/95 border-b border-slate-800/90 px-4 sm:px-6 flex items-center justify-between gap-4">
@@ -524,6 +529,7 @@ export const StandardPortfolioView: React.FC<StandardPortfolioViewProps> = ({
           <ReviewsAndFeedbackPanel
             initialReviews={reviewsPreview}
             backendConnected={overview.backendConnected}
+            dataSource={dataSource}
             onFeedbackSaved={onFeedbackSaved}
           />
         </section>
