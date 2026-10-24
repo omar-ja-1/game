@@ -74,7 +74,7 @@ export const BeaconModal: React.FC<BeaconModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-[#04060a]/85 text-white select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-[#04060a]/85 text-white select-none touch-auto animate-in fade-in duration-200">
       <div className="w-full max-w-2xl max-h-[90vh] bg-[#090d16] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0c121d]">

@@ -4,17 +4,32 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { CameraMode, CollectibleOrbData, ExhibitData, GameState } from '../types/portfolio';
-import { EXHIBITS, INITIAL_ORBS } from '../data/portfolioData';
+import {
+  CameraMode,
+  CollectibleOrbData,
+  GameState,
+  QualityTier,
+  RenderActivityMode,
+  WorldBillboardNode,
+} from '../types/portfolio';
+import { INITIAL_ORBS } from '../data/portfolioData';
 import { clampToPlazaBounds, distanceXZ, isWithinProximity } from '../game/portfolioLogic';
+import { ZoneLayoutResult } from '../game/zoneLayout';
 import { synthAudio } from '../audio/synthAudio';
+import { QUALITY_PROFILES } from '../three/qualityConfig';
 
 export interface FallbackWorldProps {
-  onInteractExhibit: (exhibit: ExhibitData) => void;
+  zoneLayout: ZoneLayoutResult;
+  onActivateNode: (node: WorldBillboardNode, meta?: { fromUserGesture?: boolean }) => void;
   onOrbCollected: (orb: CollectibleOrbData, index: number, totalCollected: number) => void;
-  onNearExhibitChange: (exhibit: ExhibitData | null) => void;
+  onNearNodeChange: (node: WorldBillboardNode | null) => void;
   onStateChange: (state: GameState) => void;
+  onReturnHubShortcut?: () => void;
+  onToggleMute?: () => void;
+  onToggleDock?: () => void;
   isSimulationActive: boolean;
+  renderActivityMode: RenderActivityMode;
+  qualityTier: QualityTier;
   cameraMode: CameraMode;
   orbsCollected: number;
   totalOrbs: number;
@@ -22,34 +37,56 @@ export interface FallbackWorldProps {
 }
 
 export interface FallbackWorldHandle {
-  warpToExhibit: (exhibitId: string) => void;
+  warpToNode: (nodeId: string) => void;
   triggerRobotWave: () => void;
   setVirtualInput: (forward: number, strafe: number) => void;
   triggerJump: () => void;
   resetSimulation: () => void;
 }
 
+const HUB_BEACON_NODE: WorldBillboardNode = {
+  id: 'hub-central-beacon',
+  zone: 'hub',
+  kind: 'beacon',
+  kicker: 'Central Monument',
+  title: 'Frequency Beacon & Guestbook',
+  subtitle: 'Plaza Centerpiece & Harmonic Core',
+  summaryLines: ['Collect all 5 energy orbs across the Main Plaza to awaken the skyward beam.'],
+  footerMeta: '5 Energy Cores · Visitor Signal Log',
+  promptLabel: 'OPEN CENTRAL BEACON',
+  accentColor: '#f59e0b',
+  glowColor: 0xf59e0b,
+  position: [0, 0, 0],
+  rotationY: 0,
+  action: { type: 'open_modal', modal: { type: 'beacon' } },
+};
+
 export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, FallbackWorldProps>(
   (
     {
-      onInteractExhibit,
+      zoneLayout,
+      onActivateNode,
       onOrbCollected,
-      onNearExhibitChange,
+      onNearNodeChange,
       onStateChange,
+      onReturnHubShortcut,
+      onToggleMute,
+      onToggleDock,
       isSimulationActive,
+      renderActivityMode,
+      qualityTier,
       isBeaconActive,
     },
     ref
   ) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    // State refs for animation loop
     const stateRef = useRef({
       robot: {
         x: 0,
-        z: 4,
+        z: 6.5,
         y: 0,
-        rotation: 0,
+        rotation: Math.PI,
         vy: 0,
         isJumping: false,
         isMoving: false,
@@ -57,33 +94,67 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         wavePhase: 0,
         blinkTimer: 2.0,
         isBlinking: false,
-        emotion: 'idle' as 'idle' | 'happy' | 'waving' | 'curious',
       },
+      savedHubPos: null as { x: number; z: number } | null,
+      lastZone: zoneLayout.zone,
       camera: {
         x: 0,
-        z: 11,
+        z: 13.5,
       },
       keys: new Set<string>(),
       virtualMove: { forward: 0, strafe: 0 },
       orbs: INITIAL_ORBS.map((o) => ({ ...o, collected: false })),
-      nearestExhibit: null as ExhibitData | null,
+      collectedCount: 0,
+      nearestNode: null as WorldBillboardNode | null,
       images: new Map<string, HTMLImageElement>(),
+      requestedImageUrls: new Set<string>(),
     });
 
-    // Expose handle methods to parent
+    // Reposition smoothly on zone change while preserving hub coordinates
+    useEffect(() => {
+      const s = stateRef.current;
+      if (s.lastZone === zoneLayout.zone) return;
+
+      if (s.lastZone === 'hub' && zoneLayout.zone !== 'hub') {
+        s.savedHubPos = { x: s.robot.x, z: s.robot.z };
+      }
+
+      s.lastZone = zoneLayout.zone;
+      s.keys.clear();
+      s.virtualMove = { forward: 0, strafe: 0 };
+      s.nearestNode = null;
+      onNearNodeChange(null);
+
+      if (zoneLayout.zone === 'hub' && s.savedHubPos) {
+        s.robot.x = s.savedHubPos.x;
+        s.robot.z = s.savedHubPos.z;
+      } else {
+        s.robot.x = zoneLayout.spawnPosition[0];
+        s.robot.z = zoneLayout.spawnPosition[2];
+      }
+      s.camera.x = s.robot.x;
+      s.camera.z = s.robot.z + 7.0;
+    }, [zoneLayout, onNearNodeChange]);
+
     React.useImperativeHandle(ref, () => ({
-      warpToExhibit: (exhibitId: string) => {
-        const ex = EXHIBITS.find((e) => e.id === exhibitId);
-        if (!ex) return;
-        stateRef.current.robot.x = ex.position[0];
-        stateRef.current.robot.z = ex.position[2] + 4;
-        stateRef.current.robot.rotation = 0;
+      warpToNode: (nodeId: string) => {
+        if (nodeId === 'hub-central-beacon' && zoneLayout.zone === 'hub') {
+          stateRef.current.robot.x = 0;
+          stateRef.current.robot.z = 3.8;
+          synthAudio.playRobotChirp('curious');
+          return;
+        }
+        const node = zoneLayout.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const offsetX = Math.sin(node.rotationY) * 3.2;
+        const offsetZ = Math.cos(node.rotationY) * 3.2;
+        stateRef.current.robot.x = node.position[0] + offsetX;
+        stateRef.current.robot.z = node.position[2] + offsetZ;
         synthAudio.playRobotChirp('curious');
       },
       triggerRobotWave: () => {
         stateRef.current.robot.isWaving = true;
         stateRef.current.robot.wavePhase = 0;
-        stateRef.current.robot.emotion = 'waving';
         synthAudio.playRobotChirp('wave');
       },
       setVirtualInput: (forward: number, strafe: number) => {
@@ -97,31 +168,28 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         }
       },
       resetSimulation: () => {
+        stateRef.current.savedHubPos = null;
         stateRef.current.robot.x = 0;
-        stateRef.current.robot.z = 4;
+        stateRef.current.robot.z = 6.5;
         stateRef.current.robot.y = 0;
-        stateRef.current.robot.rotation = 0;
         stateRef.current.robot.isJumping = false;
         stateRef.current.robot.isMoving = false;
+        stateRef.current.collectedCount = 0;
         stateRef.current.orbs = INITIAL_ORBS.map((o) => ({ ...o, collected: false }));
       },
     }));
 
-    // Preload exhibit images
-    useEffect(() => {
-      EXHIBITS.forEach((ex) => {
-        const img = new Image();
-        img.src = ex.imageAsset;
-        stateRef.current.images.set(ex.id, img);
-      });
-    }, []);
-
-    // Keyboard and resize listeners
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLSelectElement
+        ) {
           return;
         }
+        if (!isSimulationActive) return;
+
         const key = e.key.toLowerCase();
         stateRef.current.keys.add(key);
 
@@ -134,10 +202,13 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
           }
         } else if (key === 'e') {
           e.preventDefault();
-          if (stateRef.current.nearestExhibit) {
+          if (stateRef.current.nearestNode) {
             synthAudio.playHologramScan();
-            onInteractExhibit(stateRef.current.nearestExhibit);
+            onActivateNode(stateRef.current.nearestNode, { fromUserGesture: true });
           }
+        } else if (key === 'backspace' && zoneLayout.zone !== 'hub') {
+          e.preventDefault();
+          onReturnHubShortcut?.();
         } else if (key === 'q') {
           e.preventDefault();
           stateRef.current.robot.isWaving = true;
@@ -145,7 +216,11 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
           synthAudio.playRobotChirp('wave');
         } else if (key === 'm') {
           e.preventDefault();
-          synthAudio.toggleMute();
+          if (onToggleMute) onToggleMute();
+          else synthAudio.toggleMute();
+        } else if (key === 'h') {
+          e.preventDefault();
+          onToggleDock?.();
         } else if (key === 'escape' || key === 'p') {
           e.preventDefault();
           onStateChange('paused');
@@ -158,6 +233,7 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
 
       const handleBlur = () => {
         stateRef.current.keys.clear();
+        stateRef.current.virtualMove = { forward: 0, strafe: 0 };
       };
 
       window.addEventListener('keydown', handleKeyDown);
@@ -169,30 +245,67 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
         window.removeEventListener('keyup', handleKeyUp);
         window.removeEventListener('blur', handleBlur);
       };
-    }, [onInteractExhibit, onStateChange]);
+    }, [
+      isSimulationActive,
+      zoneLayout.zone,
+      onActivateNode,
+      onReturnHubShortcut,
+      onStateChange,
+      onToggleDock,
+      onToggleMute,
+    ]);
 
-    // Main 2D Canvas rendering loop
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      let animId: number;
+      const profile = QUALITY_PROFILES[qualityTier];
+      let animId = 0;
+      let throttleTimer = 0;
       let lastTime = performance.now();
+      let cachedCssW = 0;
+      let cachedCssH = 0;
+      let cachedDpr = 0;
 
-      const render = () => {
-        const now = performance.now();
-        const dt = Math.min((now - lastTime) * 0.001, 0.05);
-        lastTime = now;
+      const syncCanvasSize = () => {
+        const cssW = Math.max(1, window.innerWidth);
+        const cssH = Math.max(1, window.innerHeight);
+        const dpr = Math.min(window.devicePixelRatio || 1, profile.maxPixelRatio);
+        if (cssW !== cachedCssW || cssH !== cachedCssH || dpr !== cachedDpr) {
+          cachedCssW = cssW;
+          cachedCssH = cssH;
+          cachedDpr = dpr;
+          canvas.width = Math.round(cssW * dpr);
+          canvas.height = Math.round(cssH * dpr);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+      };
 
-        const w = (canvas.width = window.innerWidth);
-        const h = (canvas.height = window.innerHeight);
+      const ensureLazyImage = (url?: string) => {
+        if (!url) return undefined;
+        const s = stateRef.current;
+        if (!s.requestedImageUrls.has(url)) {
+          s.requestedImageUrls.add(url);
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = url;
+          s.images.set(url, img);
+        }
+        return s.images.get(url);
+      };
+
+      const drawFrame = (now: number, dt: number) => {
+        syncCanvasSize();
+        const w = cachedCssW;
+        const h = cachedCssH;
 
         const state = stateRef.current;
         const robot = state.robot;
+        const boundsR = zoneLayout.boundsRadius;
+        const isHub = zoneLayout.zone === 'hub';
 
-        // 1. Simulation update
         if (isSimulationActive) {
           let moveX = 0;
           let moveZ = 0;
@@ -214,10 +327,9 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
             robot.x += moveX * speed * dt;
             robot.z += moveZ * speed * dt;
 
-            const clamped = clampToPlazaBounds({ x: robot.x, z: robot.z }, 36);
+            const clamped = clampToPlazaBounds({ x: robot.x, z: robot.z }, boundsR);
             robot.x = clamped.x;
             robot.z = clamped.z;
-
             robot.rotation = Math.atan2(moveX, moveZ);
             robot.isMoving = true;
             synthAudio.playFootstep();
@@ -225,7 +337,6 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
             robot.isMoving = false;
           }
 
-          // Jump physics
           if (robot.isJumping) {
             robot.vy -= 24 * dt;
             robot.y += robot.vy * dt;
@@ -236,7 +347,6 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
             }
           }
 
-          // Waving
           if (robot.isWaving) {
             robot.wavePhase += dt * 8;
             if (robot.wavePhase > Math.PI * 4) {
@@ -244,7 +354,6 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
             }
           }
 
-          // Blinking
           robot.blinkTimer -= dt;
           if (robot.blinkTimer <= 0) {
             if (!robot.isBlinking) {
@@ -256,320 +365,346 @@ export const FallbackCanvasWorld = React.forwardRef<FallbackWorldHandle, Fallbac
             }
           }
 
-          // Camera follow
           state.camera.x += (robot.x - state.camera.x) * (1 - Math.exp(-6 * dt));
           state.camera.z += (robot.z + 7.0 - state.camera.z) * (1 - Math.exp(-6 * dt));
 
-          // Proximity check with exhibits
-          let foundExhibit: ExhibitData | null = null;
-          let minExhibitDist = Infinity;
-          EXHIBITS.forEach((ex) => {
-            const dist = distanceXZ({ x: robot.x, z: robot.z }, { x: ex.position[0], z: ex.position[2] });
-            if (dist <= 4.5 && dist < minExhibitDist) {
-              minExhibitDist = dist;
-              foundExhibit = ex;
+          let foundNode: WorldBillboardNode | null = null;
+          let minNodeDist = Infinity;
+          for (let i = 0; i < zoneLayout.nodes.length; i++) {
+            const node = zoneLayout.nodes[i];
+            const dist = distanceXZ(
+              { x: robot.x, z: robot.z },
+              { x: node.position[0], z: node.position[2] }
+            );
+            if (dist <= 4.4 && dist < minNodeDist) {
+              minNodeDist = dist;
+              foundNode = node;
             }
-          });
-
-          if (foundExhibit !== state.nearestExhibit) {
-            state.nearestExhibit = foundExhibit;
-            onNearExhibitChange(foundExhibit);
           }
 
-          // Orb collection
-          state.orbs.forEach((orb, i) => {
-            if (orb.collected) return;
-            if (isWithinProximity({ x: robot.x, z: robot.z }, { x: orb.position[0], z: orb.position[2] }, 1.5)) {
-              orb.collected = true;
-              const total = state.orbs.filter((o) => o.collected).length;
-              onOrbCollected(orb, i, total);
-              synthAudio.playOrbCollect(i);
+          if (isHub) {
+            const bDist = Math.hypot(robot.x, robot.z);
+            if (bDist <= 4.5 && bDist < minNodeDist) {
+              foundNode = HUB_BEACON_NODE;
             }
-          });
+          }
+
+          if (foundNode?.id !== state.nearestNode?.id) {
+            state.nearestNode = foundNode;
+            onNearNodeChange(foundNode);
+          }
+
+          if (isHub) {
+            for (let i = 0; i < state.orbs.length; i++) {
+              const orb = state.orbs[i];
+              if (orb.collected) continue;
+              if (
+                isWithinProximity(
+                  { x: robot.x, z: robot.z },
+                  { x: orb.position[0], z: orb.position[2] },
+                  1.5
+                )
+              ) {
+                orb.collected = true;
+                state.collectedCount += 1;
+                onOrbCollected(orb, i, state.collectedCount);
+                synthAudio.playOrbCollect(i);
+              }
+            }
+          }
         }
 
-        // 2. Perspective Projection Math (Pseudo-3D Isometric / 2.5D Camera)
         const centerX = w / 2;
-        const centerY = h * 0.52;
+        const centerY = h * 0.54;
         const scale = Math.min(w, h) / 18;
 
         const worldToScreen = (wx: number, wz: number, wy: number = 0) => {
           const relX = wx - state.camera.x;
           const relZ = wz - state.camera.z;
-          // Isometric pitch
-          const screenX = centerX + relX * scale;
-          const screenY = centerY + relZ * scale * 0.55 - wy * scale;
-          return { x: screenX, y: screenY };
+          return {
+            x: centerX + relX * scale,
+            y: centerY + relZ * scale * 0.55 - wy * scale,
+          };
         };
 
-        // 3. Clear Background (Deep Nocturnal Navy)
         ctx.fillStyle = '#060911';
         ctx.fillRect(0, 0, w, h);
 
-        // Radial ambient floor vignette
-        const grad = ctx.createRadialGradient(centerX, centerY, 50, centerX, centerY, Math.max(w, h) * 0.7);
+        const grad = ctx.createRadialGradient(
+          centerX,
+          centerY,
+          50,
+          centerX,
+          centerY,
+          Math.max(w, h) * 0.72
+        );
         grad.addColorStop(0, '#0c1322');
-        grad.addColorStop(0.5, '#080d17');
+        grad.addColorStop(0.55, '#080d17');
         grad.addColorStop(1, '#04060a');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
 
-        // 4. Render Glowing Cyan Floor Grid
-        ctx.strokeStyle = 'rgba(34, 211, 238, 0.12)';
+        const gridStep = profile.fallbackGridStep;
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.11)';
         ctx.lineWidth = 1;
-        for (let x = -36; x <= 36; x += 4) {
-          const p1 = worldToScreen(x, -36);
-          const p2 = worldToScreen(x, 36);
-          ctx.beginPath();
+        ctx.beginPath();
+        for (let x = -boundsR; x <= boundsR; x += gridStep) {
+          const p1 = worldToScreen(x, -boundsR);
+          const p2 = worldToScreen(x, boundsR);
           ctx.moveTo(p1.x, p1.y);
           ctx.lineTo(p2.x, p2.y);
-          ctx.stroke();
         }
-        for (let z = -36; z <= 36; z += 4) {
-          const p1 = worldToScreen(-36, z);
-          const p2 = worldToScreen(36, z);
-          ctx.beginPath();
+        for (let z = -boundsR; z <= boundsR; z += gridStep) {
+          const p1 = worldToScreen(-boundsR, z);
+          const p2 = worldToScreen(boundsR, z);
           ctx.moveTo(p1.x, p1.y);
           ctx.lineTo(p2.x, p2.y);
-          ctx.stroke();
         }
+        ctx.stroke();
 
-        // Central plaza boundary circle
-        ctx.strokeStyle = 'rgba(34, 211, 238, 0.3)';
+        ctx.strokeStyle = zoneLayout.theme.accentHex;
+        ctx.globalAlpha = 0.35;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.1) {
-          const px = Math.cos(a) * 36;
-          const pz = Math.sin(a) * 36;
-          const pt = worldToScreen(px, pz);
+        for (let a = 0; a <= Math.PI * 2 + 0.12; a += 0.15) {
+          const pt = worldToScreen(Math.cos(a) * boundsR, Math.sin(a) * boundsR);
           if (a === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         }
         ctx.stroke();
+        ctx.globalAlpha = 1;
 
-        // 5. Central Beacon
-        const beaconPt = worldToScreen(0, 0);
-        // Base ring
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(beaconPt.x, beaconPt.y, scale * 3, scale * 1.5, 0, 0, Math.PI * 2);
-        ctx.stroke();
+        if (isHub) {
+          const beaconPt = worldToScreen(0, 0);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.ellipse(beaconPt.x, beaconPt.y, scale * 2.8, scale * 1.4, 0, 0, Math.PI * 2);
+          ctx.stroke();
 
-        // Beacon skyward beam (if active)
-        if (isBeaconActive) {
-          const beamGrad = ctx.createLinearGradient(beaconPt.x, beaconPt.y, beaconPt.x, beaconPt.y - h);
-          beamGrad.addColorStop(0, 'rgba(34, 211, 238, 0.7)');
-          beamGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
-          ctx.fillStyle = beamGrad;
-          ctx.fillRect(beaconPt.x - 20, 0, 40, beaconPt.y);
+          if (isBeaconActive) {
+            const beamGrad = ctx.createLinearGradient(
+              beaconPt.x,
+              beaconPt.y,
+              beaconPt.x,
+              beaconPt.y - h
+            );
+            beamGrad.addColorStop(0, 'rgba(34, 211, 238, 0.7)');
+            beamGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+            ctx.fillStyle = beamGrad;
+            ctx.fillRect(beaconPt.x - 18, 0, 36, beaconPt.y);
+          }
+
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(beaconPt.x - 10, beaconPt.y - scale * 3.2, 20, scale * 3.2);
+          ctx.strokeStyle = '#22d3ee';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(beaconPt.x - 10, beaconPt.y - scale * 3.2, 20, scale * 3.2);
         }
 
-        // Central Spire Pillar
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(beaconPt.x - 12, beaconPt.y - scale * 3.5, 24, scale * 3.5);
-        ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(beaconPt.x - 12, beaconPt.y - scale * 3.5, 24, scale * 3.5);
+        // Sort billboards back-to-front by Z for clean 2.5D painter's order
+        const sortedNodes = [...zoneLayout.nodes].sort((a, b) => a.position[2] - b.position[2]);
 
-        // 6. Holographic Billboards
-        EXHIBITS.forEach((ex) => {
-          if (ex.terminalType === 'beacon') return;
-          const pt = worldToScreen(ex.position[0], ex.position[2]);
-          const isNearby = state.nearestExhibit?.id === ex.id;
+        for (let i = 0; i < sortedNodes.length; i++) {
+          const node = sortedNodes[i];
+          const pt = worldToScreen(node.position[0], node.position[2]);
+          const distToRobot = distanceXZ(
+            { x: robot.x, z: robot.z },
+            { x: node.position[0], z: node.position[2] }
+          );
+          const isNearby = state.nearestNode?.id === node.id;
 
-          // Pedestal base
           ctx.fillStyle = '#090d16';
-          ctx.strokeStyle = ex.accentColor;
-          ctx.lineWidth = isNearby ? 2 : 1;
+          ctx.strokeStyle = node.accentColor;
+          ctx.lineWidth = isNearby ? 2.5 : 1.2;
           ctx.beginPath();
-          ctx.ellipse(pt.x, pt.y, scale * 1.8, scale * 0.9, 0, 0, Math.PI * 2);
+          ctx.ellipse(pt.x, pt.y, scale * 1.7, scale * 0.85, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
 
-          // Floating Billboard Screen
-          const screenW = scale * 2.8;
-          const screenH = scale * 2.1;
-          const screenY = pt.y - scale * 3.0 + Math.sin(now * 0.002 + ex.position[0]) * 4;
+          const screenW = Math.max(96, scale * 3.1);
+          const screenH = Math.max(68, scale * 2.2);
+          const screenY = pt.y - scale * 2.8 + Math.sin(now * 0.002 + node.position[0]) * 3;
 
-          // Holographic glow fill
-          ctx.fillStyle = 'rgba(10, 18, 30, 0.85)';
-          ctx.strokeStyle = ex.accentColor;
+          ctx.fillStyle = 'rgba(8, 14, 26, 0.94)';
+          ctx.strokeStyle = node.accentColor;
           ctx.lineWidth = isNearby ? 2.5 : 1.5;
           ctx.beginPath();
           ctx.roundRect(pt.x - screenW / 2, screenY - screenH / 2, screenW, screenH, 8);
           ctx.fill();
           ctx.stroke();
 
-          // Render image if loaded
-          const img = state.images.get(ex.id);
-          if (img && img.complete) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.roundRect(pt.x - screenW / 2 + 4, screenY - screenH / 2 + 4, screenW - 8, screenH - 8, 6);
-            ctx.clip();
-            ctx.drawImage(img, pt.x - screenW / 2 + 4, screenY - screenH / 2 + 4, screenW - 8, screenH - 8);
-            ctx.restore();
+          if (node.imageUrl && distToRobot <= 20) {
+            const img = ensureLazyImage(node.imageUrl);
+            if (img && img.complete && img.naturalWidth > 0) {
+              ctx.save();
+              ctx.globalAlpha = 0.35;
+              ctx.beginPath();
+              ctx.roundRect(
+                pt.x - screenW / 2 + 3,
+                screenY - screenH / 2 + 3,
+                screenW - 6,
+                screenH - 6,
+                6
+              );
+              ctx.clip();
+              ctx.drawImage(
+                img,
+                pt.x - screenW / 2 + 3,
+                screenY - screenH / 2 + 3,
+                screenW - 6,
+                screenH - 6
+              );
+              ctx.restore();
+            }
           }
 
-          // Scanline overlay
-          ctx.strokeStyle = 'rgba(34, 211, 238, 0.2)';
-          ctx.lineWidth = 1;
-          for (let sy = screenY - screenH / 2; sy <= screenY + screenH / 2; sy += 6) {
-            ctx.beginPath();
-            ctx.moveTo(pt.x - screenW / 2, sy);
-            ctx.lineTo(pt.x + screenW / 2, sy);
-            ctx.stroke();
-          }
-
-          // Title tag
-          ctx.fillStyle = ex.accentColor;
-          ctx.font = 'bold 11px monospace';
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(ex.title.split('//')[0].trim(), pt.x, screenY + screenH / 2 + 16);
-        });
+          ctx.fillText(node.title.slice(0, 22), pt.x, screenY - 6);
 
-        // 7. Collectible Energy Orbs
-        state.orbs.forEach((orb) => {
-          if (orb.collected) return;
-          const opt = worldToScreen(orb.position[0], orb.position[2], 1.2 + Math.sin(now * 0.003 + orb.position[0]) * 0.2);
+          ctx.fillStyle = node.accentColor;
+          ctx.font = '10px monospace';
+          ctx.fillText(node.subtitle.slice(0, 26), pt.x, screenY + 12);
+        }
 
-          // Contact shadow on ground
-          const groundPt = worldToScreen(orb.position[0], orb.position[2], 0);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-          ctx.beginPath();
-          ctx.ellipse(groundPt.x, groundPt.y, 14, 7, 0, 0, Math.PI * 2);
-          ctx.fill();
+        if (isHub) {
+          for (let i = 0; i < state.orbs.length; i++) {
+            const orb = state.orbs[i];
+            if (orb.collected) continue;
+            const opt = worldToScreen(
+              orb.position[0],
+              orb.position[2],
+              1.2 + Math.sin(now * 0.003 + orb.position[0]) * 0.2
+            );
+            const orbGrad = ctx.createRadialGradient(opt.x, opt.y, 2, opt.x, opt.y, 13);
+            orbGrad.addColorStop(0, '#ffffff');
+            orbGrad.addColorStop(0.4, orb.accentColor);
+            orbGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+            ctx.fillStyle = orbGrad;
+            ctx.beginPath();
+            ctx.arc(opt.x, opt.y, 13, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
-          // Glowing Orb
-          const orbGrad = ctx.createRadialGradient(opt.x, opt.y, 2, opt.x, opt.y, 14);
-          orbGrad.addColorStop(0, '#ffffff');
-          orbGrad.addColorStop(0.4, orb.accentColor);
-          orbGrad.addColorStop(1, 'rgba(34, 211, 238, 0)');
-          ctx.fillStyle = orbGrad;
-          ctx.beginPath();
-          ctx.arc(opt.x, opt.y, 14, 0, Math.PI * 2);
-          ctx.fill();
-        });
-
-        // 8. Companion Robot
+        // Draw companion robot
         const rpt = worldToScreen(robot.x, robot.z, robot.y);
         const shadowPt = worldToScreen(robot.x, robot.z, 0);
 
-        // Robot contact shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.beginPath();
         ctx.ellipse(shadowPt.x, shadowPt.y, scale * 0.8, scale * 0.4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Robot Body (rounded dark matte charcoal torso)
+        const bodyW = scale * 0.85;
+        const bodyH = scale * 1.0;
         ctx.fillStyle = '#161c28';
         ctx.strokeStyle = '#22d3ee';
         ctx.lineWidth = 1.5;
-        const bodyW = scale * 0.85;
-        const bodyH = scale * 1.0;
         ctx.beginPath();
         ctx.roundRect(rpt.x - bodyW / 2, rpt.y - bodyH, bodyW, bodyH, 10);
         ctx.fill();
         ctx.stroke();
 
-        // Glowing cyan belt seam
-        ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(rpt.x - bodyW / 2, rpt.y - bodyH * 0.35);
-        ctx.lineTo(rpt.x + bodyW / 2, rpt.y - bodyH * 0.35);
-        ctx.stroke();
-
-        // Glowing Amber Heart Reactor
         ctx.fillStyle = '#f59e0b';
         ctx.beginPath();
-        ctx.arc(rpt.x, rpt.y - bodyH * 0.55, 5, 0, Math.PI * 2);
+        ctx.arc(rpt.x, rpt.y - bodyH * 0.55, 4.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Head (rounded dome)
         const headW = scale * 0.75;
-        const headH = scale * 0.7;
+        const headH = scale * 0.68;
         const headY = rpt.y - bodyH - headH * 0.8;
         ctx.fillStyle = '#161c28';
         ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.roundRect(rpt.x - headW / 2, headY, headW, headH, 12);
+        ctx.roundRect(rpt.x - headW / 2, headY, headW, headH, 11);
         ctx.fill();
         ctx.stroke();
 
-        // Antenna with glowing cyan bead tip
-        ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(rpt.x, headY);
-        ctx.lineTo(rpt.x, headY - 14);
-        ctx.stroke();
-
-        ctx.fillStyle = '#22d3ee';
-        ctx.beginPath();
-        ctx.arc(rpt.x, headY - 16, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Robot Eyes (Visor)
         ctx.fillStyle = '#05070a';
-        ctx.fillRect(rpt.x - headW * 0.38, headY + headH * 0.25, headW * 0.76, headH * 0.45);
-
+        ctx.fillRect(rpt.x - headW * 0.36, headY + headH * 0.25, headW * 0.72, headH * 0.45);
         ctx.fillStyle = '#22d3ee';
-        ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = 3;
-        if (robot.isBlinking) {
-          // Closed line eyes - -
-          ctx.beginPath();
-          ctx.moveTo(rpt.x - 12, headY + headH * 0.48);
-          ctx.lineTo(rpt.x - 4, headY + headH * 0.48);
-          ctx.moveTo(rpt.x + 4, headY + headH * 0.48);
-          ctx.lineTo(rpt.x + 12, headY + headH * 0.48);
-          ctx.stroke();
-        } else if (robot.isWaving) {
-          // Happy arch eyes ^ ^
-          ctx.beginPath();
-          ctx.arc(rpt.x - 8, headY + headH * 0.52, 5, Math.PI, 0, false);
-          ctx.arc(rpt.x + 8, headY + headH * 0.52, 5, Math.PI, 0, false);
-          ctx.stroke();
-        } else {
-          // Open friendly glowing eye pills
-          ctx.beginPath();
-          ctx.roundRect(rpt.x - 12, headY + headH * 0.35, 6, 12, 3);
-          ctx.roundRect(rpt.x + 6, headY + headH * 0.35, 6, 12, 3);
-          ctx.fill();
-        }
-
-        // Floating Waving Arm
-        if (robot.isWaving) {
-          const waveAngle = Math.sin(robot.wavePhase) * 0.4;
-          ctx.fillStyle = '#0f172a';
-          ctx.strokeStyle = '#22d3ee';
-          ctx.lineWidth = 2;
-          ctx.save();
-          ctx.translate(rpt.x + bodyW * 0.6, rpt.y - bodyH * 0.7);
-          ctx.rotate(-Math.PI * 0.6 + waveAngle);
-          ctx.fillRect(0, -4, 20, 8);
-          ctx.fillStyle = '#22d3ee';
-          ctx.beginPath();
-          ctx.arc(22, 0, 5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-
-        animId = requestAnimationFrame(render);
+        ctx.beginPath();
+        ctx.roundRect(rpt.x - 10, headY + headH * 0.35, 5, 10, 2.5);
+        ctx.roundRect(rpt.x + 5, headY + headH * 0.35, 5, 10, 2.5);
+        ctx.fill();
       };
 
-      animId = requestAnimationFrame(render);
-      return () => cancelAnimationFrame(animId);
-    }, [isSimulationActive, isBeaconActive, onNearExhibitChange, onOrbCollected]);
+      let stopped = false;
+
+      const scheduleNext = () => {
+        if (stopped || document.hidden || renderActivityMode === 'paused') return;
+        if (renderActivityMode === 'throttled') {
+          throttleTimer = window.setTimeout(() => {
+            if (!stopped && !document.hidden) {
+              animId = requestAnimationFrame(step);
+            }
+          }, Math.round(1000 / profile.titleTargetFps));
+        } else {
+          animId = requestAnimationFrame(step);
+        }
+      };
+
+      const step = () => {
+        if (stopped) return;
+        const now = performance.now();
+        const dt = Math.min(Math.max(0, (now - lastTime) * 0.001), 0.05);
+        lastTime = now;
+        drawFrame(now, dt);
+        scheduleNext();
+      };
+
+      const handleResize = () => {
+        cachedCssW = 0;
+        if (!document.hidden && renderActivityMode === 'paused') {
+          drawFrame(performance.now(), 0);
+        }
+      };
+
+      const handleVisibility = () => {
+        if (document.hidden) {
+          cancelAnimationFrame(animId);
+          clearTimeout(throttleTimer);
+        } else {
+          lastTime = performance.now();
+          if (renderActivityMode === 'paused') {
+            drawFrame(lastTime, 0);
+          } else {
+            scheduleNext();
+          }
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      drawFrame(performance.now(), 0.016);
+      scheduleNext();
+
+      return () => {
+        stopped = true;
+        cancelAnimationFrame(animId);
+        clearTimeout(throttleTimer);
+        window.removeEventListener('resize', handleResize);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
+    }, [
+      zoneLayout,
+      isSimulationActive,
+      renderActivityMode,
+      qualityTier,
+      isBeaconActive,
+      onNearNodeChange,
+      onOrbCollected,
+    ]);
 
     return (
       <canvas
         ref={canvasRef}
         data-testid="fallback-canvas"
-        className="absolute inset-0 z-0 w-full h-full cursor-grab active:cursor-grabbing"
+        className="absolute inset-0 z-0 w-full h-full touch-none cursor-grab active:cursor-grabbing"
       />
     );
   }

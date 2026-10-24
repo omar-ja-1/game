@@ -3,7 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ExhibitData, CollectibleOrbData, VisitorSignal } from '../types/portfolio';
+import {
+  CertificateItem,
+  CollectibleOrbData,
+  ContactLinkItem,
+  ExhibitData,
+  ProfileData,
+  ProjectItem,
+  SkillCategoryGroup,
+  VisitorSignal,
+} from '../types/portfolio';
+const hologramPortraitImg = new URL(
+  '../assets/images/hologram_portrait_1792852257306.jpg',
+  import.meta.url
+).href;
+const hologramProjectAiImg = new URL(
+  '../assets/images/hologram_project_ai_1792852256853.jpg',
+  import.meta.url
+).href;
+const hologramProjectGraphicsImg = new URL(
+  '../assets/images/hologram_project_graphics_1792852257795.jpg',
+  import.meta.url
+).href;
+const hologramProjectRoboticsImg = new URL(
+  '../assets/images/hologram_project_robotics_1792852258659.jpg',
+  import.meta.url
+).href;
+const titleKeyartImg = new URL(
+  '../assets/images/title_keyart_1792852256979.jpg',
+  import.meta.url
+).href;
 
 export const EXHIBITS: ExhibitData[] = [
   {
@@ -26,16 +55,23 @@ export const EXHIBITS: ExhibitData[] = [
       { label: 'Systems Deployed', value: '18' },
       { label: 'Latency Budget', value: '<16ms' },
     ],
-    techStack: ['TypeScript', 'Three.js / WebGPU', 'Rust / WASM', 'React 19', 'Web Audio API', 'Distributed Systems'],
+    techStack: [
+      'TypeScript',
+      'Three.js / WebGPU',
+      'Rust / WASM',
+      'React 19',
+      'Web Audio API',
+      'Distributed Systems',
+    ],
     highlights: [
       'Pioneered 60fps zero-allocation canvas synchronization pipelines for browser-based robotics telemetry.',
       'Authored open-source procedural audio synthesizers running hermetically on the Web Audio API.',
       'Advocate for anti-slop digital design, purposeful negative space, and accessible spatial computing.',
     ],
-    imageAsset: '/src/assets/images/hologram_portrait_1792852257306.jpg',
-    accentColor: '#22d3ee', // Cyan
+    imageAsset: hologramPortraitImg,
+    accentColor: '#22d3ee',
     glowColor: 0x22d3ee,
-    position: [0, 0, -22], // Center North
+    position: [0, 0, -22],
     rotationY: 0,
     terminalType: 'profile',
   },
@@ -65,10 +101,10 @@ export const EXHIBITS: ExhibitData[] = [
       'Dynamic ring rebalancing under transient node dropouts.',
       'Interactive spatial telemetry console rendering 10,000 active packets at 60fps.',
     ],
-    imageAsset: '/src/assets/images/hologram_project_ai_1792852256853.jpg',
-    accentColor: '#38bdf8', // Sky Cyan
+    imageAsset: hologramProjectAiImg,
+    accentColor: '#38bdf8',
     glowColor: 0x38bdf8,
-    position: [-20, 0, -10], // North West
+    position: [-20, 0, -10],
     rotationY: Math.PI / 6,
     terminalType: 'project',
     githubUrl: 'https://github.com',
@@ -100,10 +136,10 @@ export const EXHIBITS: ExhibitData[] = [
       'Real-time chromatic dispersion with negligible GPU fill-rate penalty.',
       'Touch and mouse gyroscopic momentum damping.',
     ],
-    imageAsset: '/src/assets/images/hologram_project_graphics_1792852257795.jpg',
-    accentColor: '#f59e0b', // Amber / Gold
+    imageAsset: hologramProjectGraphicsImg,
+    accentColor: '#f59e0b',
     glowColor: 0xf59e0b,
-    position: [20, 0, -10], // North East
+    position: [20, 0, -10],
     rotationY: -Math.PI / 6,
     terminalType: 'project',
     githubUrl: 'https://github.com',
@@ -129,16 +165,22 @@ export const EXHIBITS: ExhibitData[] = [
       { label: 'Power Draw', value: '4.2W idle' },
       { label: 'Reaction Time', value: '38ms' },
     ],
-    techStack: ['Embedded C++', 'TypeScript', 'WebSockets', 'Web Audio API', 'Finite State Automata'],
+    techStack: [
+      'Embedded C++',
+      'TypeScript',
+      'WebSockets',
+      'Web Audio API',
+      'Finite State Automata',
+    ],
     highlights: [
       'Second-order spring physics for natural limb deceleration and head tilts.',
       'Procedural parametric bleep & chirp synthesis reacting to proximity.',
       'Tested with over 300 human participants with a 98% friendliness rating.',
     ],
-    imageAsset: '/src/assets/images/hologram_project_robotics_1792852258659.jpg',
-    accentColor: '#06b6d4', // Cyan
+    imageAsset: hologramProjectRoboticsImg,
+    accentColor: '#06b6d4',
     glowColor: 0x06b6d4,
-    position: [-16, 0, 16], // South West
+    position: [-16, 0, 16],
     rotationY: (5 * Math.PI) / 6,
     terminalType: 'project',
     githubUrl: 'https://github.com',
@@ -169,10 +211,10 @@ export const EXHIBITS: ExhibitData[] = [
       'Interactive visitor log saved persistently to client storage.',
       'Full harmonic synth celebration on completion.',
     ],
-    imageAsset: '/src/assets/images/title_keyart_1792852256979.jpg',
+    imageAsset: titleKeyartImg,
     accentColor: '#f59e0b',
     glowColor: 0xf59e0b,
-    position: [0, 0, 0], // Center of Plaza
+    position: [0, 0, 0],
     rotationY: 0,
     terminalType: 'beacon',
   },
@@ -190,7 +232,7 @@ export const INITIAL_ORBS: CollectibleOrbData[] = [
   {
     id: 'orb-west',
     title: 'Synapse Core Beta',
-    clue: 'Hovering alongside the NeuroGrid AI pylon.',
+    clue: 'Hovering alongside the western promenade.',
     position: [-13, 1.2, -7],
     accentColor: '#38bdf8',
     collected: false,
@@ -198,7 +240,7 @@ export const INITIAL_ORBS: CollectibleOrbData[] = [
   {
     id: 'orb-east',
     title: 'Prism Core Gamma',
-    clue: 'Gleaming near the Quantum Lattice crystals.',
+    clue: 'Gleaming near the eastern crystals.',
     position: [13, 1.2, -7],
     accentColor: '#f59e0b',
     collected: false,
@@ -206,7 +248,7 @@ export const INITIAL_ORBS: CollectibleOrbData[] = [
   {
     id: 'orb-southwest',
     title: 'Kinetics Core Delta',
-    clue: 'Stationed beside the OrbitOS robotics pavilion.',
+    clue: 'Stationed beside the southwestern pavilion.',
     position: [-10, 1.2, 10],
     accentColor: '#06b6d4',
     collected: false,
@@ -247,3 +289,208 @@ export const INITIAL_VISITOR_SIGNALS: VisitorSignal[] = [
     color: '#38bdf8',
   },
 ];
+
+// ============================================================================
+// Structured Data-Driven Portfolio Records Derived Strictly From Existing Data
+// (Zero invented credentials, fake social URLs, or fabricated proficiency bars)
+// ============================================================================
+
+const profileExhibit = EXHIBITS[0];
+
+export const LOCAL_PROFILE_DATA: ProfileData = {
+  id: profileExhibit.id,
+  name: 'Aura Kaelen',
+  title: 'Lead Systems Architect & Principal Creative Technologist',
+  subtitle: profileExhibit.subtitle,
+  period: profileExhibit.year,
+  shortBio: profileExhibit.summary,
+  biography: profileExhibit.fullDescription,
+  specializations: profileExhibit.techStack,
+  highlights: profileExhibit.highlights,
+  metrics: profileExhibit.metrics,
+  portraitUrl: profileExhibit.imageAsset,
+  accentColor: profileExhibit.accentColor,
+};
+
+export const LOCAL_PROJECTS_DATA: ProjectItem[] = EXHIBITS.filter(
+  (ex) => ex.terminalType === 'project'
+).map((ex) => ({
+  id: ex.id,
+  title: ex.title.split('//')[0].trim(),
+  category: ex.category,
+  subtitle: ex.subtitle,
+  role: ex.role,
+  year: ex.year,
+  summary: ex.summary,
+  description: ex.fullDescription,
+  techStack: ex.techStack,
+  highlights: ex.highlights,
+  metrics: ex.metrics,
+  imageUrl: ex.imageAsset,
+  accentColor: ex.accentColor,
+  repoUrl: ex.githubUrl,
+  liveUrl: ex.liveUrl,
+  interactivePreset:
+    ex.id === 'neurogrid' || ex.id === 'quantum-canvas' || ex.id === 'orbit-companion'
+      ? ex.id
+      : undefined,
+}));
+
+/**
+ * Grouped strictly from the actual technologies present in the repository's EXHIBITS.
+ * No invented proficiency percentages or years of experience.
+ */
+export const LOCAL_SKILL_CATEGORIES: SkillCategoryGroup[] = [
+  {
+    id: 'skills-languages',
+    category: 'Programming Languages & Shaders',
+    summary: 'Systems, web, embedded, and GPU shading languages used across portfolio engines.',
+    accentColor: '#38bdf8',
+    skills: [
+      { name: 'TypeScript', context: 'Spatial architecture, simulation state, and typed telemetry UI' },
+      { name: 'Rust', context: 'Zero-allocation WASM memory cores in NeuroGrid' },
+      { name: 'Embedded C++', context: 'Microcontroller behavioral kinematics in OrbitOS' },
+      { name: 'Custom GLSL / TSL', context: 'Signed distance field raymarching in Quantum Lattice' },
+    ],
+  },
+  {
+    id: 'skills-graphics-ui',
+    category: 'Frameworks & 3D Graphics',
+    summary: 'Real-time spatial rendering, shader pipelines, and accessible reactive interfaces.',
+    accentColor: '#a855f7',
+    skills: [
+      { name: 'Three.js', context: 'Real-time PBR spatial scenes, instancing, and camera rigs' },
+      { name: 'WebGL', context: 'Low-overhead browser GPU rendering and telemetry consoles' },
+      { name: 'WebGPU', context: 'Compute shader projection and modern graphics pipelines' },
+      { name: 'React 19', context: 'Declarative HUD overlays, accessible modals, and state sync' },
+      { name: 'Tailwind CSS', context: 'Responsive mobile-first layout and dark-surface styling' },
+    ],
+  },
+  {
+    id: 'skills-systems-protocols',
+    category: 'Distributed Systems & Runtime',
+    summary: 'High-concurrency edge networking, binary protocols, and deterministic state machines.',
+    accentColor: '#22d3ee',
+    skills: [
+      { name: 'WebAssembly (WASM)', context: 'Browser-resident high-throughput compute modules' },
+      { name: 'Distributed Systems', context: 'Peer-to-peer topological ring routing and consensus' },
+      { name: 'gRPC-Web', context: 'Streaming binary RPC across distributed inference nodes' },
+      { name: 'WebSockets', context: 'Asynchronous real-time robotics telemetry broadcasts' },
+      { name: 'Finite State Automata', context: 'Deterministic companion posture and safety invariants' },
+    ],
+  },
+  {
+    id: 'skills-audio-ml',
+    category: 'Audio, Math & Edge ML',
+    summary: 'Procedural sound synthesis, computational geometry, and lightweight neural inference.',
+    accentColor: '#f59e0b',
+    skills: [
+      { name: 'Web Audio API', context: 'Hermetic procedural synthesizers and companion bleeps' },
+      { name: 'MathJS', context: 'Higher-dimensional polytope projections and manifold math' },
+      { name: 'TensorFlow Lite', context: 'Edge-deployed neural inference choreography' },
+    ],
+  },
+];
+
+/**
+ * No certificate records exist in the repository seed; kept empty rather than fabricating credentials.
+ * Populated automatically when connected to the production backend API.
+ */
+export const LOCAL_CERTIFICATES_DATA: CertificateItem[] = [];
+
+/**
+ * Reads only explicitly configured public contact endpoints from environment variables.
+ * Never fabricates missing social accounts or email addresses.
+ */
+export function readConfiguredEnvContacts(
+  envRecord?: Record<string, string | undefined>
+): ContactLinkItem[] {
+  const env: Record<string, string | undefined> =
+    envRecord ??
+    ((typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: Record<string, string | undefined> }).env) ||
+      {});
+
+  const rawCandidates: Array<{
+    id: string;
+    platform: string;
+    kind: ContactLinkItem['kind'];
+    rawValue?: string;
+    description: string;
+    accentColor: string;
+  }> = [
+    {
+      id: 'contact-github',
+      platform: 'GitHub',
+      kind: 'social',
+      rawValue: env.VITE_PORTFOLIO_GITHUB_URL,
+      description: 'Open source repositories and engineering codebases',
+      accentColor: '#38bdf8',
+    },
+    {
+      id: 'contact-linkedin',
+      platform: 'LinkedIn',
+      kind: 'social',
+      rawValue: env.VITE_PORTFOLIO_LINKEDIN_URL,
+      description: 'Professional profile and career network',
+      accentColor: '#22d3ee',
+    },
+    {
+      id: 'contact-website',
+      platform: 'Website',
+      kind: 'website',
+      rawValue: env.VITE_PORTFOLIO_WEBSITE_URL,
+      description: 'Primary web domain and technical publications',
+      accentColor: '#14b8a6',
+    },
+    {
+      id: 'contact-facebook',
+      platform: 'Facebook',
+      kind: 'social',
+      rawValue: env.VITE_PORTFOLIO_FACEBOOK_URL,
+      description: 'Social updates and community page',
+      accentColor: '#818cf8',
+    },
+    {
+      id: 'contact-email',
+      platform: 'Email',
+      kind: 'email',
+      rawValue: env.VITE_PORTFOLIO_EMAIL,
+      description: 'Direct electronic mail inquiry',
+      accentColor: '#f59e0b',
+    },
+  ];
+
+  const valid: ContactLinkItem[] = [];
+  for (const item of rawCandidates) {
+    const trimmed = item.rawValue?.trim();
+    if (!trimmed) continue;
+
+    if (item.kind === 'email') {
+      const href = trimmed.toLowerCase().startsWith('mailto:') ? trimmed : `mailto:${trimmed}`;
+      const address = href.replace(/^mailto:/i, '').trim();
+      if (address.includes('@') && !address.includes(' ')) {
+        valid.push({
+          id: item.id,
+          platform: item.platform,
+          kind: 'email',
+          url: href,
+          handleOrLabel: address,
+          description: item.description,
+          accentColor: item.accentColor,
+        });
+      }
+    } else if (/^https?:\/\/[^\s]+$/i.test(trimmed)) {
+      valid.push({
+        id: item.id,
+        platform: item.platform,
+        kind: item.kind,
+        url: trimmed,
+        handleOrLabel: trimmed.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''),
+        description: item.description,
+        accentColor: item.accentColor,
+      });
+    }
+  }
+
+  return valid;
+}

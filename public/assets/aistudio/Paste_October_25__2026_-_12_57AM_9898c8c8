@@ -1,0 +1,634 @@
+# Mission: Build a Complete, Data-Driven, Mobile-First 3D Portfolio World
+
+Act as a senior Three.js game engineer, React architect, frontend performance engineer, and UI/UX designer.
+
+You are continuing work on my existing dark futuristic 3D portfolio project. You have already implemented an initial mobile performance optimization pass, including adaptive graphics settings, shared 3D resources, optimized particle effects, improved rendering lifecycle management, and mobile touch improvements.
+
+**Continue from the CURRENT codebase and preserve the existing optimizations. Do not rebuild the project from scratch.**
+
+My goal is to transform the existing project into a complete, interactive, game-like portfolio world where every billboard is connected to real portfolio content, every section has its own organized environment, and visitors can navigate the experience smoothly on mobile devices, including low-end phones.
+
+Do not stop at planning. Inspect the project and implement the necessary code changes directly.
+
+# PRIORITY ORDER
+
+Follow this priority order throughout implementation:
+
+1. Preserve existing functionality and previously implemented optimizations.
+2. Make the mobile experience smooth, accessible, and practical.
+3. Implement functional, data-driven billboards and interactions.
+4. Build the section-specific environments and automatic billboard layouts.
+5. Preserve the existing visual identity and improve it where appropriate.
+6. Verify the build, tests, navigation, data flows, and performance-related behavior.
+
+When a trade-off is necessary, prioritize usable mobile performance over unnecessary visual effects.
+
+---
+
+# PART 1 — INSPECT AND PROTECT THE CURRENT PROJECT
+
+Before making changes:
+
+- Inspect the current directory structure, package.json, TypeScript configuration, current scene architecture, data models, rendering loop, asset loaders, input controls, and existing quality configuration.
+- Review the previous performance improvements, especially:
+  - `src/three/qualityConfig.ts`
+  - `src/three/WorldScene.ts`
+  - `src/three/HologramBillboard.ts`
+  - `src/three/CompanionRobot.ts`
+  - `src/three/proceduralAssets.ts`
+  - `src/components/FallbackCanvasWorld.tsx`
+  - `src/App.tsx`
+  - Existing portfolio data, modals, UI components, and tests.
+- Use the actual current file structure. Some filenames or responsibilities may have changed.
+- Retain the current Three.js/WebGL implementation and existing framework.
+- Reuse the current rendering engine, resource pools, asset optimizations, graphics profiles, and game logic wherever possible.
+- Do not duplicate existing features under new names.
+- Do not create a second WebGL renderer for every portfolio section.
+- Avoid unnecessary dependencies, architectural rewrites, and destructive edits.
+
+Preserve the current dark nocturnal aesthetic, neon cyan and purple accents, holographic displays, atmosphere, companion character, player movement, keyboard controls, mobile controls, and existing interactions unless a specific change is essential for compatibility or performance.
+
+Before changing anything, understand how the existing system works. Implement changes incrementally and keep the project buildable.
+
+# PART 2 — MOBILE-FIRST PERFORMANCE FOR A WIDE RANGE OF DEVICES
+
+Mobile phones are my primary audience. I want the experience to remain attractive without forcing visitors to use powerful hardware.
+
+The minimum target is to attempt a stable experience around 30 FPS on tested low-end devices, while allowing more capable devices to reach 45–60 FPS when possible. These are performance targets, not results to claim without actual measurements.
+
+## A. Implement four practical rendering modes
+
+Integrate these modes into the existing quality system rather than creating an unrelated system.
+
+### Auto
+- Select an initial quality level using available device capabilities.
+- Use device memory, hardware concurrency, pointer capabilities, viewport size, and supported graphics features only as imperfect hints.
+- Do not rely exclusively on user-agent detection.
+- Adapt quality gradually if measured rendering performance remains poor.
+- Avoid expensive benchmark scenes or long blocking initialization.
+- Remember manual overrides when appropriate.
+
+### Low
+Designed for budget and older mobile phones, including devices with approximately 3–4 GB total RAM, provided their graphics hardware and browser can support the scene.
+
+- Set the effective render pixel ratio to a maximum of approximately 1.0, allowing a lower value such as 0.75 on very weak devices.
+- Disable real-time shadow maps.
+- Use a small number of essential lights.
+- Replace unnecessary point lights with emissive materials and inexpensive glow decals.
+- Substantially reduce ambient particles, hologram particles, and decorative animations.
+- Use lightweight materials for expensive environment surfaces.
+- Disable expensive post-processing.
+- Reduce texture resolution and anisotropic filtering where appropriate.
+- Avoid unnecessary transparency overdraw.
+- Keep important holograms, player movement, navigation, and interaction feedback visible.
+- Preserve sufficient contrast and readability.
+
+### Medium
+- Use a render pixel ratio cap around 1.25–1.35.
+- Use inexpensive lighting and restrained shadows.
+- Enable more particles and detail than Low, but avoid unnecessarily expensive effects.
+- Preserve the existing performance-conscious approach to holograms and shared resources.
+
+### High
+- Preserve the current desktop visual quality as closely as possible.
+- Retain the existing higher-quality lighting, particles, shadows, and materials when practical.
+- Do not lower desktop quality simply to make all devices use identical settings.
+
+Use realistic fallbacks when a feature is unsupported.
+
+## B. Runtime adaptation
+
+Implement a conservative performance adaptation strategy:
+
+- Measure frame-time behavior without adding significant production overhead.
+- If frame time remains consistently too high for several seconds during active gameplay, reduce graphics quality gradually.
+- Use hysteresis and cooldown periods to prevent quality levels from oscillating constantly.
+- Do not reduce quality based on one temporary frame spike.
+- When appropriate, restore higher quality only after sustained good performance and a reasonable cooldown.
+- Give visitors a manual Auto / Low / Medium / High override through the existing pause menu or settings interface.
+- Persist manual preferences using the existing preference system or localStorage.
+- Do not let rendering quality change player movement speed, physics, collision behavior, interaction distances, or input responsiveness.
+
+If WebGL 2 or the required rendering capabilities are unavailable, or the device cannot maintain a usable experience, activate a lightweight alternative renderer or accessible non-3D portfolio interface.
+
+The fallback must retain access to every portfolio section and use the same real data sources and links.
+
+## C. Render-loop and resource management
+
+- Never continuously render a fully active background world behind a modal that does not need it.
+- Pause or throttle decorative animation on the title screen, when the document is hidden, and when inspection or feedback modals are open.
+- Pause gameplay appropriately when the pause menu is open.
+- Restore rendering and input correctly when a modal closes.
+- Keep camera and player controls responsive during active gameplay.
+- Reuse shared geometries, materials, and textures.
+- Use instancing or batching for repeated decorative geometry when appropriate.
+- Avoid per-frame allocations and unnecessary React state updates.
+- Properly dispose of resources when they are no longer used.
+- Preserve WebGL context-loss handling and recovery if already implemented.
+- Do not eagerly load the models, images, and textures for every future portfolio section.
+
+Do not regress the previous optimization work.
+
+---
+
+# PART 3 — THE MAIN WORLD AND ITS SIX REAL BILLBOARDS
+
+The starting world must contain six clearly identifiable, visually attractive main billboards.
+
+The main world is a navigation hub, not a wall containing the entirety of my portfolio content.
+
+The six main billboards represent:
+
+1. About Me
+2. Projects
+3. Skills
+4. Certificates
+5. Contact & Social Links
+6. Feedback & Reviews
+
+Each billboard must display a SHORT, REAL SUMMARY loaded from the portfolio data layer.
+
+Examples of appropriate summaries:
+
+- About Me: my actual name, professional role, and a brief biography.
+- Projects: a compact selection of actual projects and the real total count when available.
+- Skills: a compact selection of actual skills and relevant categories.
+- Certificates: a concise selection of real certificates.
+- Contact & Social Links: actual available social platforms and relevant links.
+- Feedback & Reviews: real published review summaries and available review counts.
+
+These examples describe the types of information to display. Do not invent my identity, achievements, projects, certificates, URLs, ratings, or testimonials.
+
+The actual data schema may differ. Inspect and reuse the current codebase before introducing new fields.
+
+## Main-world interaction
+
+Each billboard must support:
+
+1. The player approaches the billboard.
+2. A clear interaction prompt appears, such as `E — INSPECT` on desktop.
+3. A prominent, touch-friendly interaction button appears on mobile when the billboard is within interaction range.
+4. The visitor explicitly activates the billboard.
+5. The correct action takes place according to its type.
+
+Do not redirect visitors merely because they walk near an object.
+
+The interaction should work with existing keyboard movement, touch movement, and camera controls without conflicts.
+
+Add appropriate visual feedback for proximity, selection, active state, and interaction completion. Keep it performant.
+
+---
+
+# PART 4 — EACH BILLBOARD MUST HAVE CORRECT, DATA-DRIVEN BEHAVIOR
+
+## A. About Me
+
+The main billboard displays a short summary using the actual profile data.
+
+When opened, show a complete, readable profile view containing the available real information, such as:
+
+- Name and professional title.
+- Full biography.
+- Technical interests and specialization.
+- Relevant career or education information if available.
+- Profile links and any existing profile media.
+
+Only show fields actually provided by the data source. Do not fabricate missing information.
+
+Use an accessible HTML interface or the project's existing modal architecture for long-form content. Do not render a large wall of tiny 3D text.
+
+## B. Projects
+
+The main billboard displays an appropriate summary of actual projects.
+
+Selecting it transitions the player into a dedicated Projects Zone.
+
+This zone contains individual project billboards, and every billboard represents one real project from the data source.
+
+When the visitor approaches and opens a project billboard, display the corresponding project's full available information:
+
+- Project title.
+- Description.
+- Technologies or stack.
+- Available images or screenshots.
+- Source repository link.
+- Live demo link.
+- Relevant existing metadata.
+
+Only display links and fields that actually exist.
+
+The project detail view must be different for each project and must always use the selected project's real identifier and data.
+
+Do not implement all project boards as identical hardcoded placeholders.
+
+Images must load lazily. Avoid loading the full-resolution screenshots of every project as soon as the visitor enters the Projects Zone.
+
+## C. Skills
+
+The main billboard displays a concise summary of actual skills.
+
+Selecting it transitions into a Skills Zone containing organized skill boards.
+
+Group skills by available categories, such as:
+
+- Backend development.
+- Programming languages.
+- Frameworks and libraries.
+- Databases.
+- APIs and integrations.
+- Tools and infrastructure.
+
+Use only categories and technologies supported by the actual data.
+
+When a skill board is opened, present its relevant details clearly.
+
+Do not invent proficiency scores, years of experience, or percentage-based skill bars unless those values are explicitly provided by the data source.
+
+## D. Certificates
+
+The main billboard displays a real summary of available certificates.
+
+Selecting it opens a Certificates Zone with individual, organized certificate boards.
+
+Each board should display whatever real fields exist, such as:
+
+- Certificate name.
+- Issuer.
+- Issue date.
+- Expiration date when applicable.
+- Credential ID when available.
+- Verification URL when available.
+- Certificate image when available.
+
+Opening a board must show the full available details of that specific certificate.
+
+Do not invent credentials or verification links.
+
+## E. Contact & Social Links
+
+The main billboard summarizes the actual available contact methods and social accounts.
+
+Selecting it opens a Contact Zone containing individual, clearly labeled boards for available platforms, such as Facebook, LinkedIn, GitHub, email, or other services actually present in the data.
+
+Each board must have the correct behavior:
+
+- External social platform: open its actual URL in a new tab when the visitor explicitly activates it.
+- Email: open a properly formed `mailto:` link when available.
+- Website: open the actual destination.
+- Any other supported link: use its real destination and appropriate action.
+
+Use safe external-link handling, including `rel="noopener noreferrer"` for new tabs where applicable.
+
+Do not create missing account URLs or pretend unavailable contact methods exist.
+
+The interaction prompt should make the resulting action understandable before the visitor activates it.
+
+## F. Feedback & Reviews
+
+The main billboard displays the actual available feedback summary or the latest published reviews.
+
+Selecting it opens a Feedback Zone that supports viewing reviews and submitting feedback.
+
+Every published review must come from the real data source.
+
+Show exactly three reviews at a time when three or more reviews are available.
+
+For example, nine published reviews should be navigable as three groups of three, with the appropriate next and previous controls.
+
+Requirements:
+
+- Use real pagination or a lightweight carousel with three records per page.
+- Keep navigation controls accessible on mobile.
+- Show the correct page and review counts when available.
+- Handle zero, one, two, three, and many reviews without errors.
+- Handle loading, empty states, pagination boundaries, and request failures.
+- Do not create fake reviews to fill empty slots.
+- Do not automatically rotate reviews so quickly that visitors cannot read them.
+- If optional automatic rotation is implemented, make it slow and pause it during interaction, focus, or touch input.
+
+### Feedback submission form
+
+Provide an accessible feedback form with appropriate fields, such as a display name, optional relevant contact field, rating if supported by the existing data model, and feedback text.
+
+Requirements:
+
+- Validate input on the client for usability.
+- Enforce actual data validation and security on the backend as appropriate.
+- Handle submission/loading/success/error states.
+- Prevent repeated accidental submissions.
+- Do not claim that feedback has been saved unless the server confirms success.
+- Use the existing authenticated or public submission policy where applicable.
+- Respect existing anti-spam protection and backend validation.
+- Do not expose private credentials, service-role keys, or server secrets in client-side code.
+
+If feedback persistence is not currently connected, create a clean integration boundary and explain exactly what must be connected. Do not pretend that local-only feedback is saved permanently.
+
+---
+
+# PART 5 — EVERY SECTION GETS ITS OWN ORGANIZED WORLD
+
+This is a critical part of the design.
+
+The main world has the six main section billboards. When the visitor selects a section, they must enter a distinct, organized area within the portfolio experience.
+
+The section areas should feel like different rooms or locations inside the same futuristic world rather than separate, unrelated web pages.
+
+## Shared world architecture
+
+Prefer one existing WebGL renderer and one main canvas.
+
+Reuse the current environment, camera, lighting system, resources, and player where appropriate.
+
+Represent each section as a managed zone, with only the required content and active objects enabled for the current zone.
+
+Use the existing architecture where possible. Do not create six independent full-scale worlds or six continuously rendering canvases.
+
+A zone can reposition the player through a smooth, brief transition or activate another area of the existing environment. Choose the approach that best fits the codebase and keeps memory and rendering costs low.
+
+When transitioning:
+
+- Use a smooth but short transition.
+- Avoid unnecessary loading screens when content is already available.
+- Prevent the player from becoming stuck outside the destination zone.
+- Preserve a clear return path.
+- Restore camera and movement state correctly.
+
+## A. Projects Zone layout
+
+Support any reasonable number of projects without manually positioning each one.
+
+Examples:
+
+- Two projects: show them in a balanced, spacious arrangement.
+- Five projects: arrange them in a visually balanced layout, with adequate distance between boards.
+- Ten or more projects: arrange them in multiple rows or logical groups.
+
+Implement a deterministic layout function that computes positions from the available items, zone boundaries, spacing requirements, and visual arrangement.
+
+Requirements:
+
+- Keep billboards from overlapping.
+- Keep enough space for the player to move between them.
+- Face labels and interactive surfaces toward the visitor when appropriate.
+- Ensure that nearby boards can be distinguished and selected.
+- Avoid creating excessively large, expensive, detailed environments as the project count grows.
+- Load or enable only the objects required for the currently visible or nearby content.
+- Provide sensible behavior for empty and loading states.
+
+Do not hardcode a separate scene for two, five, or ten projects. One reusable layout system should support variable counts.
+
+## B. Skills Zone layout
+
+Organize skills into category boards based on real data.
+
+Each category can contain individual skill items presented through compact HTML panels or lightweight 3D labels, as appropriate.
+
+Support additional skill categories without requiring manual scene redesign.
+
+## C. Certificates Zone layout
+
+Arrange available certificate boards using the same reusable layout principles.
+
+Use lightweight placeholders while certificate images are loading, and show image previews only when useful.
+
+## D. Contact Zone layout
+
+Arrange the available contact and social boards clearly, with readable platform names and concise guidance about each action.
+
+Do not generate a board for a missing URL.
+
+## E. Feedback Zone layout
+
+The Feedback Zone needs:
+
+- One primary feedback and review display.
+- Three review cards per page or view.
+- Previous and next controls.
+- A clearly accessible feedback form.
+- Clear submission feedback.
+
+Do not create one full 3D object for every historical review. Keep the number of expensive 3D elements small and render review content inside a reusable HTML interface.
+
+## F. Central Home / Return Billboard
+
+Every section zone must contain an unmistakable central or otherwise prominent Home / Return to Main World billboard.
+
+The billboard must work through the same approach-and-interact system as the other billboards.
+
+Additionally, provide a compact persistent home/back control in the normal UI, especially on mobile. Visitors should never have to wander around looking for a way home.
+
+Return navigation must restore the main-world state without unnecessarily reloading the application or fetching the entire world again.
+
+---
+
+# PART 6 — ONE CONSISTENT INTERACTION SYSTEM
+
+Use one reusable billboard interaction architecture for the entire project.
+
+Each billboard should have a typed identity, type, position, summary data, and action appropriate to its role.
+
+Avoid implementing six unrelated interaction systems.
+
+Support:
+
+- Keyboard movement on desktop.
+- The existing movement controls and virtual joystick or D-pad on mobile.
+- Existing camera controls.
+- Proximity detection.
+- An explicit interaction action.
+- Appropriate content detail views.
+- Safe external link navigation.
+- Back/Home navigation.
+- Clear focus, selection, loading, and error states.
+
+Do not allow the virtual movement controls and camera dragging to cancel each other accidentally.
+
+The interaction system must work for dynamically generated boards, not just the original six.
+
+Use appropriate interaction distances and touch targets. Mobile controls should be comfortable to use one-handed and should not unnecessarily obscure the content.
+
+Use `prefers-reduced-motion` where appropriate, and offer an accessible way to access content without having to navigate the 3D world.
+
+---
+
+# PART 7 — REAL BACKEND DATA, NOT FAKE PLACEHOLDERS
+
+The portfolio content will be connected to my real backend. The code must be prepared to use the actual data source.
+
+This requirement applies to EVERY section, not just About Me.
+
+## First inspect existing integration
+
+Determine whether the current project already contains:
+
+- A backend API client.
+- Supabase or another backend integration.
+- Existing portfolio data models.
+- Project, skill, certificate, social-link, and feedback tables or endpoints.
+- Environment variables and existing authentication or authorization logic.
+
+Use those actual integrations and schemas whenever they exist.
+
+Do not invent API URLs, database tables, database columns, environment variable names, credentials, or undocumented backend contracts.
+
+## Create a clean data-access layer
+
+If a suitable data layer exists, extend it without breaking compatibility.
+
+Otherwise, introduce a small typed service or repository abstraction that provides access to:
+
+- Profile / About data.
+- Projects.
+- Skill categories and skills.
+- Certificates.
+- Contact and social links.
+- Published reviews.
+- Feedback submission.
+
+Use the naming and types that fit the current codebase.
+
+All billboard previews and their detailed views must consume the same underlying data source. Avoid one copy of project information for the main board and another independently hardcoded copy for the detail view.
+
+The architecture should support:
+
+- Loading states.
+- Empty states.
+- Request errors.
+- Pagination.
+- Reusable item selection.
+- Lazy image loading.
+- Data refresh when appropriate.
+- Graceful fallback when the backend is temporarily unavailable.
+
+Use the project's actual backend if it is connected and correctly configured.
+
+If the backend is not yet configured:
+
+- Keep the data adapter ready for the eventual integration.
+- Clearly document the exact files, environment variables, and configuration still required.
+- Keep any development seed data separate from production data access.
+- Use existing portfolio data where available.
+- Never manufacture personal details, project records, social links, certificates, or reviews and present them as real.
+- When real feedback data is unavailable, display a proper empty state instead of fake comments.
+
+Do not expose backend service secrets to the browser.
+
+Make the transition from the current data source to the real backend simple and predictable.
+
+---
+
+# PART 8 — MOBILE-FIRST UI AND ACCESSIBILITY
+
+The immersive experience should remain enjoyable rather than becoming an obstacle to viewing my portfolio.
+
+Implement or preserve the following:
+
+- A clear initial loading screen with real progress information when available.
+- A short, readable control guide.
+- Visible interaction prompts when a billboard is within range.
+- Large, comfortable mobile action controls.
+- Readable text that works on small screens.
+- Accessible HTML detail panels and forms.
+- Proper focus behavior and Escape/back handling where appropriate.
+- No accidental navigation just from approaching a board.
+- No overlapping buttons or panels.
+- No content that requires precise movement when a simple button would be easier.
+- No unnecessarily long opening animation that delays access to the portfolio.
+- A visible `Quick View` / `Skip 3D Experience` option.
+- A lightweight 2D or standard portfolio alternative that uses the same real data and links.
+
+Keep the futuristic 3D world as the main experience, but never make the 3D controls the only way to access my actual work.
+
+---
+
+# PART 9 — KEEP PERFORMANCE INDEPENDENT OF CONTENT SIZE
+
+The amount of portfolio content must not make rendering cost grow unnecessarily.
+
+Apply these principles:
+
+- Keep only the current zone and nearby objects active when possible.
+- Use shared geometry, materials, textures, and reusable billboard components.
+- Avoid an independent point light for every board.
+- Prefer emissive materials and inexpensive glow effects.
+- Avoid expensive 3D text where HTML text is sufficient.
+- Lazy-load project screenshots and certificate images.
+- Request only the current page of feedback when using a paginated backend endpoint, where supported.
+- Avoid fetching the entire dataset on every interaction.
+- Cache suitable responses in memory where safe and consistent with the data policy.
+- Avoid repeated fetches caused by component remounts.
+- Clean up abandoned requests and resources where appropriate.
+- Avoid unnecessary continuous animation when there is no active gameplay.
+- Use the existing instancing and resource-sharing systems.
+- Maintain predictable frame-time and memory usage as the number of records increases.
+
+Do not optimize by simply deleting important portfolio content.
+
+---
+
+# PART 10 — VERIFY ACTUAL BEHAVIOR
+
+After implementing the changes:
+
+1. Run the existing build command.
+2. Run the available TypeScript checks and tests.
+3. Fix any regressions that your changes introduce.
+4. Verify that existing quality controls still work.
+5. Verify that all six main billboards perform their correct actions.
+6. Verify that each zone can be entered and exited.
+7. Verify that dynamically generated billboards do not overlap for different item counts.
+8. Verify that project, certificate, and social links use their actual data.
+9. Verify that reviews display three items per page and navigate correctly.
+10. Verify that the feedback form handles validation and server responses correctly.
+11. Verify mobile input behavior and the existing camera/player controls.
+12. Verify that opening a modal or hiding the tab stops or appropriately throttles unnecessary rendering.
+13. Verify that the lightweight fallback exposes all required portfolio information.
+14. Check for broken links, missing assets, console errors, and obvious memory leaks.
+
+If physical devices are available, test on at least:
+- A low-end or older Android device with approximately 3–4 GB of total RAM.
+- A mid-range Android device.
+- A desktop browser.
+
+If you cannot test physical devices, do not claim that the performance targets have been achieved. State precisely what was verified by code, build, or automated tests and what still requires real-device testing.
+
+---
+
+# PART 11 — REQUIRED FINAL REPORT
+
+When implementation is complete, provide a concise but specific report covering:
+
+1. Which existing files were changed and which files were added.
+2. How the main-world billboards work.
+3. What each of the six sections does.
+4. How section layouts adapt to the number of records.
+5. How the real backend data layer works and whether it is fully connected.
+6. What mobile performance safeguards were implemented.
+7. How the lightweight fallback works.
+8. Which build, TypeScript, and automated tests passed or failed.
+9. Any backend configuration or environment variables still required.
+10. Any physical-device tests still outstanding.
+
+Do not claim that real backend integration works if no actual backend was available to verify it. Do not claim a measured FPS improvement without real measurements.
+
+# FINAL ACCEPTANCE CRITERIA
+
+The work is complete only when:
+
+- The existing project still builds.
+- The initial portfolio world contains six functional, data-driven main billboards.
+- Every section has a distinct, navigable area with a return-to-home billboard and a persistent UI back control.
+- Project, skill, certificate, contact, and feedback displays use a consistent, reusable interaction system.
+- Billboards display real data rather than fabricated production content.
+- Project and certificate boards are generated dynamically and organized without overlap.
+- Social boards navigate to the correct real external URLs.
+- Reviews show three real records at a time when available and support navigation through additional records.
+- Feedback submission has an honest, properly handled persistence state.
+- Mobile performance settings support low-end hardware and retain an accessible alternative when the device cannot support the 3D experience comfortably.
+- Previous optimizations remain intact and are not inadvertently undone.
+- No backend credentials or secrets are exposed.
+- Build and automated verification results are reported honestly.
+
+**The overall vision:** a polished, dark, futuristic, game-like portfolio where visitors explore a world of holographic billboards, every board leads to real portfolio information or an actual action, each category has its own organized space, and the experience remains lightweight and welcoming on mobile devices.
+
+Implement this in the existing codebase, preserving the current visual identity, existing functionality, and previous performance work.

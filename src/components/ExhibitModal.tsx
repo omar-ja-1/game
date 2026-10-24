@@ -37,8 +37,14 @@ export const ExhibitModal: React.FC<ExhibitModalProps> = ({ exhibit, onClose }) 
     setActiveTab(tab);
   };
 
+  const [imageError, setImageError] = useState<boolean>(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [exhibit.id]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-[#04060a]/85 text-white select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-[#04060a]/85 text-white select-none touch-auto animate-in fade-in duration-200">
       <div className="w-full max-w-4xl max-h-[90vh] bg-[#090d16] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0c121d]">
@@ -65,12 +71,24 @@ export const ExhibitModal: React.FC<ExhibitModalProps> = ({ exhibit, onClose }) 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
             {/* Hologram Artwork Frame */}
             <div className="md:col-span-5 relative rounded-2xl overflow-hidden border border-slate-800 bg-[#060a12] aspect-[4/3] flex items-center justify-center group">
-              <img
-                src={exhibit.imageAsset}
-                alt={exhibit.title}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
+              {!imageError ? (
+                <img
+                  src={exhibit.imageAsset}
+                  alt={exhibit.title}
+                  loading="lazy"
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImageError(true)}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-[#081221] to-[#050811]">
+                  <span className="text-xs font-mono text-cyan-400">{exhibit.category}</span>
+                  <span className="text-sm font-semibold text-slate-200 mt-1">
+                    {exhibit.title.split('//')[0].trim()}
+                  </span>
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-[#090d16] via-transparent to-transparent pointer-events-none" />
               <div className="absolute bottom-3 left-3 text-[11px] font-mono text-cyan-300">
                 PROJECTION ACTIVE

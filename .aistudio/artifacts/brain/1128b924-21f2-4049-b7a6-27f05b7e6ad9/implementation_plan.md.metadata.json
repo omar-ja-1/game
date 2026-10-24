@@ -1,0 +1,6 @@
+{
+  "summary":  "Architectural implementation plan for optimizing the 3D nocturnal portfolio world for mobile performance while preserving desktop visual fidelity, interactive exhibits, controls, and nocturnal sci-fi identity. Covers adaptive High/Medium/Low quality tiers with Pause menu override, dynamic point-light consolidation with emissive glow decals, instanced geometry batching, smart render-loop lifecycle throttling/pausing, GPU texture scaling and disposal, and optional dev-only diagnostics.",
+  "updatedAt":  "2026-10-24T21:19:26.144448230Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
